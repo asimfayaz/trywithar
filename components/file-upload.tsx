@@ -8,23 +8,33 @@ import { cn } from "@/lib/utils"
 
 interface FileUploadProps {
   onUpload: (file: File) => void
+  disabled?: boolean
 }
 
-export function FileUpload({ onUpload }: FileUploadProps) {
+export function FileUpload({ onUpload, disabled = false }: FileUploadProps) {
   const [isDragOver, setIsDragOver] = useState(false)
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragOver(true)
-  }, [])
+  const handleDragOver = useCallback(
+    (e: React.DragEvent) => {
+      if (disabled) return
+      e.preventDefault()
+      setIsDragOver(true)
+    },
+    [disabled],
+  )
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragOver(false)
-  }, [])
+  const handleDragLeave = useCallback(
+    (e: React.DragEvent) => {
+      if (disabled) return
+      e.preventDefault()
+      setIsDragOver(false)
+    },
+    [disabled],
+  )
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
+      if (disabled) return
       e.preventDefault()
       setIsDragOver(false)
 
@@ -35,17 +45,18 @@ export function FileUpload({ onUpload }: FileUploadProps) {
         onUpload(imageFile)
       }
     },
-    [onUpload],
+    [onUpload, disabled],
   )
 
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (disabled) return
       const file = e.target.files?.[0]
       if (file && file.type.startsWith("image/")) {
         onUpload(file)
       }
     },
-    [onUpload],
+    [onUpload, disabled],
   )
 
   return (
@@ -53,15 +64,29 @@ export function FileUpload({ onUpload }: FileUploadProps) {
       <div
         className={cn(
           "border-2 border-dashed rounded-lg p-3 text-center flex-1 flex flex-col items-center justify-center transition-colors overflow-hidden",
-          isDragOver ? "border-blue-500 bg-blue-50" : "border-gray-300 hover:border-gray-400",
+          disabled
+            ? "border-gray-200 bg-gray-50 cursor-not-allowed"
+            : isDragOver
+              ? "border-blue-500 bg-blue-50"
+              : "border-gray-300 hover:border-gray-400",
         )}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
         <div className="space-y-2 flex flex-col items-center justify-center max-h-full">
-          <div className="w-8 h-8 mx-auto bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
-            <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div
+            className={cn(
+              "w-8 h-8 mx-auto rounded-full flex items-center justify-center flex-shrink-0",
+              disabled ? "bg-gray-200" : "bg-gray-100",
+            )}
+          >
+            <svg
+              className={cn("w-4 h-4", disabled ? "text-gray-400" : "text-gray-600")}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -72,20 +97,26 @@ export function FileUpload({ onUpload }: FileUploadProps) {
           </div>
 
           <div className="flex-shrink-0 text-center">
-            <p className="text-sm font-medium text-gray-900 mb-1">Drop photo here</p>
-            <p className="text-xs text-gray-500 mb-2">or click to browse</p>
+            <p className={cn("text-sm font-medium mb-1", disabled ? "text-gray-400" : "text-gray-900")}>
+              {disabled ? "Photos uploaded" : "Drop front photo here"}
+            </p>
+            <p className={cn("text-xs mb-2", disabled ? "text-gray-400" : "text-gray-500")}>
+              {disabled ? "Use the preview to manage photos" : "or click to browse"}
+            </p>
           </div>
 
-          <div className="space-y-1 flex-shrink-0">
-            <Button asChild size="sm" className="w-full">
-              <label className="cursor-pointer">
-                <input type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
-                Upload Photo
-              </label>
-            </Button>
+          {!disabled && (
+            <div className="space-y-1 flex-shrink-0">
+              <Button asChild size="sm" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium">
+                <label className="cursor-pointer">
+                  <input type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
+                  Upload Front Photo
+                </label>
+              </Button>
 
-            <p className="text-xs text-gray-400">JPG, PNG, WebP up to 10MB</p>
-          </div>
+              <p className="text-xs text-gray-400">JPG, PNG, WebP up to 10MB</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

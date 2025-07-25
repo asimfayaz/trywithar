@@ -8,81 +8,91 @@ interface ProcessingStatusProps {
 }
 
 const stages = [
-  { key: "uploaded", label: "Photo uploaded", icon: "📷" },
+  { key: "uploaded", label: "Photo uploaded", icon: "📤" },
   { key: "processing", label: "Processing image", icon: "🔄" },
   { key: "generating", label: "Generating 3D model", icon: "🎯" },
   { key: "ready", label: "Model ready", icon: "✅" },
-] as const
+]
 
 export function ProcessingStatus({ stage, thumbnail }: ProcessingStatusProps) {
   const currentStageIndex = stages.findIndex((s) => s.key === stage)
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col items-center justify-center h-96 space-y-6">
       {/* Thumbnail */}
-      <div className="flex justify-center">
-        <div className="w-32 h-32 rounded-lg overflow-hidden border border-gray-200">
-          <img src={thumbnail || "/placeholder.svg"} alt="Processing" className="w-full h-full object-cover" />
-        </div>
+      <div className="w-32 h-32 rounded-lg overflow-hidden shadow-lg">
+        <img src={thumbnail || "/placeholder.svg"} alt="Processing" className="w-full h-full object-cover" />
       </div>
 
       {/* Progress Steps */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-medium text-center text-gray-900">Generating your 3D model...</h3>
+      <div className="space-y-4 w-full max-w-md">
+        {stages.map((stageItem, index) => {
+          const isCompleted = index < currentStageIndex
+          const isCurrent = index === currentStageIndex
+          const isPending = index > currentStageIndex
 
-        <div className="space-y-3">
-          {stages.map((stageItem, index) => {
-            const isCompleted = index <= currentStageIndex
-            const isCurrent = index === currentStageIndex
-
-            return (
+          return (
+            <div key={stageItem.key} className="flex items-center space-x-3">
+              {/* Icon */}
               <div
-                key={stageItem.key}
                 className={cn(
-                  "flex items-center space-x-3 p-3 rounded-lg transition-all duration-300",
-                  isCompleted ? "bg-green-50 border border-green-200" : "bg-gray-50 border border-gray-200",
+                  "w-8 h-8 rounded-full flex items-center justify-center text-sm",
+                  isCompleted && "bg-green-500 text-white",
+                  isCurrent && "bg-blue-500 text-white animate-pulse",
+                  isPending && "bg-gray-200 text-gray-500",
                 )}
               >
-                <div
-                  className={cn(
-                    "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-300",
-                    isCompleted ? "bg-green-500 text-white" : "bg-gray-300 text-gray-600",
-                  )}
-                >
-                  {isCompleted ? "✓" : index + 1}
-                </div>
-
-                <div className="flex-1">
-                  <p
-                    className={cn(
-                      "font-medium transition-all duration-300",
-                      isCompleted ? "text-green-800" : "text-gray-600",
-                    )}
-                  >
-                    {stageItem.label}
-                  </p>
-                </div>
-
-                {isCurrent && (
-                  <div className="flex-shrink-0">
-                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                  </div>
+                {isCompleted ? (
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      fillRule="evenodd"
+                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                ) : isCurrent ? (
+                  <div className="w-3 h-3 bg-white rounded-full animate-spin" />
+                ) : (
+                  <div className="w-3 h-3 bg-gray-400 rounded-full" />
                 )}
               </div>
-            )
-          })}
-        </div>
 
-        {/* Progress Bar */}
-        <div className="w-full bg-gray-200 rounded-full h-2">
-          <div
-            className="bg-blue-500 h-2 rounded-full transition-all duration-500 ease-out"
-            style={{ width: `${((currentStageIndex + 1) / stages.length) * 100}%` }}
-          />
-        </div>
+              {/* Label */}
+              <span
+                className={cn(
+                  "text-sm font-medium",
+                  isCompleted && "text-green-600",
+                  isCurrent && "text-blue-600",
+                  isPending && "text-gray-500",
+                )}
+              >
+                {stageItem.label}
+              </span>
 
-        <p className="text-center text-sm text-gray-500">This usually takes 2-3 minutes</p>
+              {/* Loading indicator for current stage */}
+              {isCurrent && (
+                <div className="flex-1 flex justify-end">
+                  <div className="flex space-x-1">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" />
+                    <div
+                      className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
+                      style={{ animationDelay: "0.1s" }}
+                    />
+                    <div
+                      className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
+                      style={{ animationDelay: "0.2s" }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
+
+      <p className="text-sm text-gray-600 text-center">
+        This usually takes 2-3 minutes. You can continue using the app while we process your model.
+      </p>
     </div>
   )
 }

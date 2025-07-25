@@ -1,82 +1,107 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, CreditCard, DollarSign, History } from "lucide-react"
+import { Separator } from "@/components/ui/separator"
+import Link from "next/link"
 
 export default function BillingPage() {
-  const router = useRouter()
-  const [creditAmount, setCreditAmount] = useState("10")
-  const [isProcessing, setIsProcessing] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
 
-  // Mock user data - in real app this would come from context/API
+  // Mock user data
   const user = {
     name: "John Doe",
     email: "john@example.com",
-    credits: 5.0,
     freeModelsUsed: 2,
+    credits: 5.0,
     totalModelsGenerated: 15,
   }
 
   // Mock transaction history
   const transactions = [
-    { id: "1", date: "2024-01-15", amount: 20.0, type: "purchase", description: "Credit purchase" },
-    { id: "2", date: "2024-01-14", amount: -1.0, type: "usage", description: "3D model generation" },
-    { id: "3", date: "2024-01-13", amount: -1.0, type: "usage", description: "3D model generation" },
-    { id: "4", date: "2024-01-10", amount: 10.0, type: "purchase", description: "Credit purchase" },
-    { id: "5", date: "2024-01-09", amount: -1.0, type: "usage", description: "3D model generation" },
+    {
+      id: "1",
+      type: "purchase" as const,
+      amount: 10.0,
+      credits: 10,
+      date: new Date("2024-01-15"),
+      status: "completed" as const,
+    },
+    {
+      id: "2",
+      type: "usage" as const,
+      amount: -1.0,
+      credits: -1,
+      date: new Date("2024-01-14"),
+      status: "completed" as const,
+      description: "3D Model Generation",
+    },
+    {
+      id: "3",
+      type: "usage" as const,
+      amount: -1.0,
+      credits: -1,
+      date: new Date("2024-01-13"),
+      status: "completed" as const,
+      description: "3D Model Generation",
+    },
+    {
+      id: "4",
+      type: "purchase" as const,
+      amount: 25.0,
+      credits: 25,
+      date: new Date("2024-01-10"),
+      status: "completed" as const,
+    },
   ]
 
-  const handlePurchaseCredits = async () => {
-    setIsProcessing(true)
-    // Simulate payment processing
+  const handlePurchase = async (amount: number) => {
+    setIsLoading(true)
+    // Simulate API call
     await new Promise((resolve) => setTimeout(resolve, 2000))
-    setIsProcessing(false)
-    alert(`Successfully purchased $${creditAmount} in credits!`)
+    alert(`Purchase of $${amount} completed! (This is a demo)`)
+    setIsLoading(false)
   }
 
-  const presetAmounts = ["10", "25", "50", "100"]
+  const freeModelsRemaining = Math.max(0, 2 - user.freeModelsUsed)
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center space-x-4">
-          <Button variant="ghost" size="sm" onClick={() => router.back()}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
-          </Button>
-          <h1 className="text-2xl font-bold text-gray-900">Manage Billing</h1>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <Link href="/" className="text-blue-600 hover:text-blue-800">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </Link>
+            <h1 className="text-2xl font-bold text-gray-900">Manage Billing</h1>
+          </div>
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto p-6 space-y-6">
+      <div className="max-w-4xl mx-auto p-6 space-y-8">
         {/* Current Balance */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <DollarSign className="w-5 h-5" />
-              <span>Current Balance</span>
-            </CardTitle>
-            <CardDescription>Your available credits and usage summary</CardDescription>
+            <CardTitle>Current Balance</CardTitle>
+            <CardDescription>Your account balance and usage summary</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="text-center">
-                <div className="text-3xl font-bold text-green-600">${user.credits.toFixed(2)}</div>
+                <div className="text-3xl font-bold text-blue-600">${user.credits.toFixed(2)}</div>
                 <p className="text-sm text-gray-600">Available Credits</p>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-blue-600">{user.freeModelsUsed}/2</div>
-                <p className="text-sm text-gray-600">Free Models Used</p>
+                <div className="text-3xl font-bold text-green-600">{freeModelsRemaining}</div>
+                <p className="text-sm text-gray-600">Free Models Remaining</p>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-purple-600">{user.totalModelsGenerated}</div>
+                <div className="text-3xl font-bold text-gray-900">{user.totalModelsGenerated}</div>
                 <p className="text-sm text-gray-600">Total Models Generated</p>
               </div>
             </div>
@@ -86,96 +111,118 @@ export default function BillingPage() {
         {/* Purchase Credits */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <CreditCard className="w-5 h-5" />
-              <span>Purchase Credits</span>
-            </CardTitle>
-            <CardDescription>
-              Add credits to your account. $1 = 1 model generation. Minimum purchase: $10
-            </CardDescription>
+            <CardTitle>Purchase Credits</CardTitle>
+            <CardDescription>Each credit generates one 3D model. Minimum purchase is $10.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="amount">Amount (USD)</Label>
-              <div className="flex space-x-2">
-                <div className="flex-1">
-                  <Input
-                    id="amount"
-                    type="number"
-                    min="10"
-                    step="1"
-                    value={creditAmount}
-                    onChange={(e) => setCreditAmount(e.target.value)}
-                    placeholder="Enter amount"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Preset Amounts */}
-            <div className="space-y-2">
-              <Label>Quick Select</Label>
-              <div className="flex space-x-2">
-                {presetAmounts.map((amount) => (
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {[
+                { amount: 10, credits: 10, popular: false },
+                { amount: 25, credits: 25, popular: true },
+                { amount: 50, credits: 50, popular: false },
+                { amount: 100, credits: 100, popular: false },
+              ].map((option) => (
+                <div
+                  key={option.amount}
+                  className={`relative border rounded-lg p-4 text-center ${
+                    option.popular ? "border-blue-500 bg-blue-50" : "border-gray-200"
+                  }`}
+                >
+                  {option.popular && (
+                    <Badge className="absolute -top-2 left-1/2 transform -translate-x-1/2 bg-blue-500">
+                      Most Popular
+                    </Badge>
+                  )}
+                  <div className="text-2xl font-bold">${option.amount}</div>
+                  <div className="text-sm text-gray-600 mb-4">{option.credits} credits</div>
                   <Button
-                    key={amount}
-                    variant={creditAmount === amount ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCreditAmount(amount)}
+                    onClick={() => handlePurchase(option.amount)}
+                    disabled={isLoading}
+                    className="w-full"
+                    variant={option.popular ? "default" : "outline"}
                   >
-                    ${amount}
+                    {isLoading ? "Processing..." : "Purchase"}
                   </Button>
-                ))}
+                </div>
+              ))}
+            </div>
+            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center space-x-2 text-sm text-gray-600">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                  />
+                </svg>
+                <span>Secure payment processing powered by Stripe</span>
               </div>
             </div>
-
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <p className="text-sm text-blue-800">
-                <strong>You will receive:</strong> ${creditAmount} in credits ({creditAmount} model generations)
-              </p>
-            </div>
-
-            <Button
-              onClick={handlePurchaseCredits}
-              disabled={isProcessing || Number.parseInt(creditAmount) < 10}
-              className="w-full"
-            >
-              {isProcessing ? "Processing..." : `Purchase $${creditAmount} Credits`}
-            </Button>
-
-            <p className="text-xs text-gray-500 text-center">Secure payment powered by Stripe. Credits never expire.</p>
           </CardContent>
         </Card>
 
         {/* Transaction History */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <History className="w-5 h-5" />
-              <span>Transaction History</span>
-            </CardTitle>
-            <CardDescription>Your recent credit purchases and usage</CardDescription>
+            <CardTitle>Transaction History</CardTitle>
+            <CardDescription>Your recent purchases and usage</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {transactions.map((transaction) => (
-                <div key={transaction.id} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <div
-                      className={`w-2 h-2 rounded-full ${
-                        transaction.type === "purchase" ? "bg-green-500" : "bg-red-500"
-                      }`}
-                    />
-                    <div>
-                      <p className="font-medium">{transaction.description}</p>
-                      <p className="text-sm text-gray-600">{transaction.date}</p>
+            <div className="space-y-4">
+              {transactions.map((transaction, index) => (
+                <div key={transaction.id}>
+                  <div className="flex items-center justify-between py-3">
+                    <div className="flex items-center space-x-3">
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                          transaction.type === "purchase" ? "bg-green-100 text-green-600" : "bg-blue-100 text-blue-600"
+                        }`}
+                      >
+                        {transaction.type === "purchase" ? (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                            />
+                          </svg>
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 01-11.651-2.235c0-1.21.357-2.335.971-3.282A5.002 5.002 0 0112 2c2.761 0 5 2.239 5 5 0 .34-.035.672-.1.994l2.387.477a2 2 0 001.022-.547z"
+                            />
+                          </svg>
+                        )}
+                      </div>
+                      <div>
+                        <div className="font-medium">
+                          {transaction.type === "purchase"
+                            ? `Credit Purchase - ${transaction.credits} credits`
+                            : transaction.description || "Credit Usage"}
+                        </div>
+                        <div className="text-sm text-gray-500">{transaction.date.toLocaleDateString()}</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div
+                        className={`font-medium ${transaction.type === "purchase" ? "text-green-600" : "text-red-600"}`}
+                      >
+                        {transaction.type === "purchase" ? "+" : ""}${Math.abs(transaction.amount).toFixed(2)}
+                      </div>
+                      <Badge
+                        variant={transaction.status === "completed" ? "secondary" : "destructive"}
+                        className="text-xs"
+                      >
+                        {transaction.status}
+                      </Badge>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <Badge variant={transaction.type === "purchase" ? "default" : "secondary"}>
-                      {transaction.type === "purchase" ? "+" : ""}${Math.abs(transaction.amount).toFixed(2)}
-                    </Badge>
-                  </div>
+                  {index < transactions.length - 1 && <Separator />}
                 </div>
               ))}
             </div>

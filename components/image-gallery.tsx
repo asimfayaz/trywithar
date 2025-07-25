@@ -1,7 +1,7 @@
 "use client"
 
-import type { ModelData } from "@/app/page"
 import { cn } from "@/lib/utils"
+import type { ModelData } from "@/app/page"
 
 interface ImageGalleryProps {
   models: ModelData[]
@@ -13,61 +13,89 @@ export function ImageGallery({ models, onSelectModel, selectedModelId }: ImageGa
   if (models.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-gray-500">
-        <div className="text-center">
-          <div className="w-12 h-12 mx-auto mb-3 bg-gray-100 rounded-full flex items-center justify-center">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
-          </div>
-          <h3 className="text-base font-medium mb-1">No Models Yet</h3>
-          <p className="text-sm">Upload your first photo to get started</p>
+        <div className="w-12 h-12 mx-auto mb-3 bg-gray-100 rounded-full flex items-center justify-center">
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+            />
+          </svg>
         </div>
+        <p className="text-sm text-center">No photos yet. Upload photos to get started!</p>
       </div>
     )
   }
 
   return (
-    <div className="grid grid-cols-2 gap-3 h-full overflow-y-auto pr-2 -mr-2">
-      {models.map((model) => (
-        <div
-          key={model.id}
-          className={cn(
-            "relative group cursor-pointer rounded-lg overflow-hidden border-2 transition-all duration-200 hover:shadow-lg aspect-square",
-            selectedModelId === model.id ? "border-blue-500 shadow-lg" : "border-gray-200 hover:border-gray-300",
-          )}
-          onClick={() => onSelectModel(model)}
-        >
-          <div className="w-full h-full">
+    <div className="h-full overflow-y-auto -mr-2 pr-2">
+      <div className="grid grid-cols-2 gap-3">
+        {models.map((model) => (
+          <div
+            key={model.id}
+            className={cn(
+              "relative aspect-square rounded-lg overflow-hidden cursor-pointer transition-all border-2",
+              selectedModelId === model.id
+                ? "border-blue-500 ring-2 ring-blue-200"
+                : "border-transparent hover:border-gray-300",
+            )}
+            onClick={() => onSelectModel(model)}
+          >
             <img
               src={model.thumbnail || "/placeholder.svg"}
-              alt="Model thumbnail"
+              alt="Photo thumbnail"
               className="w-full h-full object-cover"
             />
-          </div>
 
-          {/* Status Indicator */}
-          <div className="absolute top-2 right-2">
-            {model.status === "processing" && (
-              <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse" title="Processing" />
-            )}
-            {model.status === "complete" && <div className="w-3 h-3 bg-green-500 rounded-full" title="Complete" />}
-            {model.status === "failed" && <div className="w-3 h-3 bg-red-500 rounded-full" title="Failed" />}
-          </div>
+            {/* Status Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
-          {/* Overlay */}
-          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200" />
+            {/* Status Badge */}
+            <div className="absolute top-2 right-2">
+              {model.status === "uploaded" && (
+                <div className="bg-gray-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
+                  <div className="w-2 h-2 bg-white rounded-full mr-1" />
+                  Uploaded
+                </div>
+              )}
+              {model.status === "processing" && (
+                <div className="bg-yellow-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
+                  <div className="w-2 h-2 bg-white rounded-full mr-1 animate-pulse" />
+                  Processing
+                </div>
+              )}
+              {model.status === "complete" && (
+                <div className="bg-green-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
+                  <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      fillRule="evenodd"
+                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  Ready
+                </div>
+              )}
+              {model.status === "failed" && (
+                <div className="bg-red-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
+                  <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      fillRule="evenodd"
+                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  Failed
+                </div>
+              )}
+            </div>
 
-          {/* Date */}
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
-            <p className="text-white text-xs truncate">{model.uploadedAt.toLocaleDateString()}</p>
+            {/* Date */}
+            <div className="absolute bottom-2 left-2 text-white text-xs">{model.uploadedAt.toLocaleDateString()}</div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   )
 }

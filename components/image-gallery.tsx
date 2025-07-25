@@ -29,8 +29,8 @@ export function ImageGallery({ models, onSelectModel, selectedModelId }: ImageGa
   }
 
   return (
-    <div className="h-full overflow-y-auto -mr-2 pr-2">
-      <div className="grid grid-cols-2 gap-3">
+    <div className="overflow-y-auto -mr-2 pr-2 h-full max-h-full">
+      <div className="grid grid-cols-2 gap-3 pb-4">
         {models.map((model) => (
           <div
             key={model.id}

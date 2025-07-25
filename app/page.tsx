@@ -293,10 +293,10 @@ export default function Home() {
       {/* Main Grid Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6 h-[calc(100vh-88px)]">
         {/* Left Column - Gallery (X) and Upload (Y) */}
-        <div className="lg:col-span-1 flex flex-col space-y-6">
+        <div className="lg:col-span-1 flex flex-col space-y-6 h-[calc(100vh-88px)]">
           {/* Gallery Section (X) - Takes remaining space */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex-1 min-h-0">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Photos</h2>
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex-1 min-h-0 overflow-hidden">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Uploads</h2>
             <ImageGallery models={models} onSelectModel={handleSelectModel} selectedModelId={selectedModel?.id} />
           </div>
 

@@ -35,6 +35,19 @@ const config: Config = {
   				DEFAULT: 'hsl(var(--muted))',
   				foreground: 'hsl(var(--muted-foreground))'
   			},
+			  brand: {
+				50: '#f0f4ff',
+				100: '#e0eaff',
+				200: '#c7d8ff',
+				300: '#a4bdff',
+				400: '#8196ff',
+				500: '#5468ff',
+				600: '#4c62f7',
+				700: '#3b4de3',
+				800: '#3040b8',
+				900: '#2e3c92',
+				950: '#1e2558',
+			},
   			accent: {
   				DEFAULT: 'hsl(var(--accent))',
   				foreground: 'hsl(var(--accent-foreground))'

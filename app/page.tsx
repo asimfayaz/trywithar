@@ -292,18 +292,18 @@ export default function Home() {
 
       {/* Main Grid Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6 h-[calc(100vh-88px)]">
-        {/* Left Column - Gallery (X) and Upload (Y) */}
-        <div className="lg:col-span-1 flex flex-col space-y-6 h-[calc(100vh-88px)]">
-          {/* Gallery Section (X) - Takes remaining space */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex-1 min-h-0 overflow-hidden">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Uploads</h2>
-            <ImageGallery models={models} onSelectModel={handleSelectModel} selectedModelId={selectedModel?.id} />
-          </div>
-
+        {/* Left Column - Gallery and Upload (X) */}
+        <div className="lg:col-span-1 space-y-4 flex flex-col min-h-0">
           {/* Upload Section (Y) - Fixed square size */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 aspect-square">
+          <div className="grid row-span-1bg-white rounded-lg shadow-sm border border-gray-200 p-6 h-fit">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Upload Photos</h2>
             <FileUpload onUpload={(file) => handleUpload(file, "front")} disabled={false} />
+          </div>
+
+          {/* Image Gallery (X) - Takes remaining space */}
+          <div className="grid row-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex-1 min-h-0">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Photos</h2>
+            <ImageGallery models={models} onSelectModel={handleSelectModel} selectedModelId={selectedModel?.id} />
           </div>
         </div>
 

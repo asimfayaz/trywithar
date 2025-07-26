@@ -108,7 +108,7 @@ export function PhotoPreview({ photoSet, onUpload, onRemove, disabled = false }:
                 />
 
                 {photo ? (
-                  <div className="relative w-full h-full">
+                  <div className="relative aspect-square w-full h-full">
                     <img
                       src={URL.createObjectURL(photo) || "/placeholder.svg"}
                       alt={`${label} view`}

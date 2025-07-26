@@ -295,7 +295,7 @@ export default function Home() {
         {/* Left Column - Gallery and Upload (X) */}
         <div className="lg:col-span-1 space-y-4 flex flex-col min-h-0">
           {/* Upload Section (Y) - Fixed square size */}
-          <div className="grid row-span-1bg-white rounded-lg shadow-sm border border-gray-200 p-6 h-fit">
+          <div className="grid row-span-1 bg-white rounded-lg shadow-sm border border-gray-200 p-6 h-fit">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Upload Photos</h2>
             <FileUpload onUpload={(file) => handleUpload(file, "front")} disabled={false} />
           </div>
@@ -310,7 +310,7 @@ export default function Home() {
         {/* Right Column - Model Viewer (Z) */}
         <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex flex-col">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">3D Model Viewer</h2>
+            <h2 className="text-lg font-semibold text-gray-900">3D Model</h2>
           </div>
 
           <div className="flex-1 min-h-0 flex flex-col">

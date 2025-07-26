@@ -3,12 +3,9 @@
 import { useState } from "react"
 import { ImageGallery } from "@/components/image-gallery"
 import { FileUpload } from "@/components/file-upload"
-import { ModelViewer } from "@/components/model-viewer"
 import { AuthModal } from "@/components/auth-modal"
 import { UserDashboard } from "@/components/user-dashboard"
-import { ProcessingStatus } from "@/components/processing-status"
 import { PhotoPreview } from "@/components/photo-preview"
-import { Button } from "@/components/ui/button"
 
 export interface ModelData {
   id: string
@@ -231,6 +228,9 @@ export default function Home() {
       ),
     )
 
+    // Update the selected model immediately
+    setSelectedModel((prev) => (prev ? { ...prev, status: "processing", processingStage: "uploaded" } : null))
+
     // Simulate processing stages
     simulateProcessing(selectedModel.id)
 
@@ -252,6 +252,10 @@ export default function Home() {
         setModels((prev) =>
           prev.map((model) => (model.id === modelId ? { ...model, processingStage: stages[currentStage] } : model)),
         )
+        // Update selected model as well
+        setSelectedModel((prev) =>
+          prev && prev.id === modelId ? { ...prev, processingStage: stages[currentStage] } : prev,
+        )
       } else {
         // Processing complete
         setModels((prev) =>
@@ -265,6 +269,17 @@ export default function Home() {
                 }
               : model,
           ),
+        )
+        // Update selected model as well
+        setSelectedModel((prev) =>
+          prev && prev.id === modelId
+            ? {
+                ...prev,
+                status: "complete",
+                modelUrl: "/assets/3d/duck.glb",
+                processingStage: undefined,
+              }
+            : prev,
         )
         setIsGenerating(false)
         clearInterval(interval)
@@ -315,47 +330,25 @@ export default function Home() {
 
           <div className="flex-1 min-h-0 flex flex-col">
             {selectedModel ? (
-              selectedModel.status === "processing" ? (
-                <ProcessingStatus
-                  stage={selectedModel.processingStage || "uploaded"}
-                  thumbnail={selectedModel.thumbnail}
-                />
-              ) : selectedModel.status === "complete" ? (
-                <div className="flex-1 min-h-0">
-                  <ModelViewer modelUrl={selectedModel.modelUrl!} />
-                </div>
-              ) : selectedModel.status === "failed" ? (
+              selectedModel.status === "failed" ? (
                 <div className="flex items-center justify-center flex-1 text-red-500">
                   <p>Model generation failed. Please try again.</p>
                 </div>
               ) : (
-                // Show photo preview for uploaded but not processed models
-                <div className="flex-1 min-h-0 flex flex-col">
-                  <div className="flex-1 min-h-0">
-                    <PhotoPreview
-                      photoSet={currentPhotoSet}
-                      onUpload={handleUpload}
-                      onRemove={handleRemovePhoto}
-                      disabled={false}
-                    />
-                  </div>
-
-                  {/* Generate Button - positioned below the photo grid */}
-                  {hasPhotos && selectedModel && (
-                    <div className="pt-2">
-                      <Button
-                        onClick={handleGenerateModel}
-                        disabled={!canGenerate}
-                        className="w-full bg-blue-600 hover:bg-blue-700 h-12 text-base font-medium"
-                      >
-                        {isGenerating
-                          ? "Generating..."
-                          : selectedModel.status === "complete"
-                            ? "Regenerate 3D Model"
-                            : "Generate 3D Model"}
-                      </Button>
-                    </div>
-                  )}
+                // Show photo preview with integrated model viewer, generate button, and processing steps
+                <div className="flex-1 min-h-0">
+                  <PhotoPreview
+                    photoSet={currentPhotoSet}
+                    onUpload={handleUpload}
+                    onRemove={handleRemovePhoto}
+                    disabled={false}
+                    onGenerate={handleGenerateModel}
+                    canGenerate={canGenerate}
+                    isGenerating={isGenerating}
+                    processingStage={selectedModel.processingStage}
+                    modelUrl={selectedModel.modelUrl}
+                    selectedModel={selectedModel}
+                  />
                 </div>
               )
             ) : (

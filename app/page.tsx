@@ -352,17 +352,24 @@ export default function Home() {
       type: currentPhotoSet.front.type
     });
     
+    console.log('🔄 About to import uploadOriginalImageToR2...');
     const { uploadOriginalImageToR2 } = await import('@/lib/backgroundRemoval');
+    console.log('✅ Successfully imported uploadOriginalImageToR2');
+    
+    console.log('🔄 About to call uploadOriginalImageToR2...');
     const rawImageUpload = await uploadOriginalImageToR2(currentPhotoSet.front);
+    console.log('✅ uploadOriginalImageToR2 completed successfully');
     
     console.log('✅ Raw image upload result:', rawImageUpload);
     
     // Validate the upload result
     if (!rawImageUpload || !rawImageUpload.url) {
+      console.error('❌ Upload result validation failed:', { rawImageUpload });
       throw new Error('Failed to upload raw image to R2 - no URL returned');
     }
     
     console.log('✅ Raw image uploaded to R2:', rawImageUpload.url);
+    console.log('🔄 Moving to Step 2: Creating photo record...');
     
     // Step 2: Create photo record with actual raw image URL
     console.log('📝 Creating photo record with raw image URL...');

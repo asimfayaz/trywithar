@@ -307,11 +307,29 @@ export const photoService = {
   async createPhoto(photoData: Omit<Photo, 'id' | 'created_at' | 'updated_at'>) {
     console.log('🔍 Creating photo with data:', JSON.stringify(photoData, null, 2));
     
+    // Debug Supabase client configuration
+    console.log('🔧 Supabase client config:', {
+      url: process.env.NEXT_PUBLIC_SUPABASE_URL ? 'SET' : 'MISSING',
+      anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'SET' : 'MISSING',
+      clientExists: !!supabase
+    });
+    
+    // Check authentication status
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    console.log('🔐 Auth session:', {
+      hasSession: !!session,
+      userId: session?.user?.id,
+      sessionError: sessionError?.message
+    });
+    
+    console.log('📡 About to make Supabase insert call...');
     const { data, error } = await supabase
       .from('photos')
       .insert(photoData)
       .select()
       .single();
+    
+    console.log('📡 Supabase insert call completed:', { hasData: !!data, hasError: !!error });
     
     if (error) {
       console.error('❌ Photo creation failed:', {

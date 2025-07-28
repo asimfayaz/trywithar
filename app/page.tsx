@@ -207,7 +207,7 @@ export default function Home() {
     setIsGenerating(false)
   }
 
-  const handleUpload = (file: File, position: keyof PhotoSet = "front") => {
+  const handleUpload = async (file: File, position: keyof PhotoSet = "front") => {
     if (!user) {
       setAuthReason("You need to sign in to upload photos")
       setShowAuthModal(true)
@@ -216,50 +216,78 @@ export default function Home() {
 
     console.log(`📤 Uploading ${position} photo:`, file.name)
 
-    // If uploading a front photo, always create a new model (this is the primary photo)
-    if (position === "front") {
-      const newModel: ModelData = {
-        id: Date.now().toString(),
-        thumbnail: URL.createObjectURL(file),
-        status: "uploaded",
-        uploadedAt: new Date(),
-        updatedAt: new Date(),
-        photoSet: { front: file },
-      }
-      setModels((prev) => [newModel, ...prev])
-      setSelectedModel(newModel)
-      setCurrentPhotoSet({ front: file })
-    } else {
-      // For additional photos (left, right, back), update the current photo set and selected model
-      setCurrentPhotoSet((prev) => ({
-        ...prev,
-        [position]: file,
-      }))
+    try {
+      // First upload the file to R2
+      const { uploadFile } = await import('@/lib/r2')
+      const uploadResult = await uploadFile('photos', file.name, file, file.type)
+      
+      console.log(`✅ File uploaded to R2: ${uploadResult.url}`)
 
-      if (selectedModel) {
-        // Update existing model with additional photo
-        setModels((prev) =>
-          prev.map((model) =>
+      // If uploading a front photo, create a new model
+      if (position === "front") {
+        // Create photo in database
+        const photoData = {
+          user_id: user.id,
+          front_image_url: uploadResult.url,
+          generation_status: 'pending'
+        }
+        
+        const newPhoto = await photoService.createPhoto(photoData)
+        
+        const newModel: ModelData = {
+          id: newPhoto.id,
+          thumbnail: URL.createObjectURL(file),
+          status: "uploaded",
+          uploadedAt: new Date(newPhoto.created_at),
+          updatedAt: new Date(newPhoto.updated_at),
+          photoSet: { front: file },
+        }
+
+        setModels((prev) => [...prev, newModel])
+        setSelectedModel(newModel)
+        setCurrentPhotoSet({ front: file })
+      } else if (selectedModel) {
+        // For other positions, update the existing photo
+        const updates: any = {}
+        if (position === 'left') updates.left_image_url = uploadResult.url
+        else if (position === 'right') updates.right_image_url = uploadResult.url
+        else if (position === 'back') updates.back_image_url = uploadResult.url
+        
+        // Update the photo in database
+        await photoService.updatePhoto(selectedModel.id, updates)
+        
+        // Update local state
+        setCurrentPhotoSet(prev => ({
+          ...prev,
+          [position]: file,
+        }))
+
+        setModels(prev =>
+          prev.map(model =>
             model.id === selectedModel.id
               ? {
                   ...model,
                   photoSet: { ...model.photoSet, [position]: file },
                 }
-              : model,
-          ),
+              : model
+          )
         )
-        setSelectedModel((prev) =>
+        
+        setSelectedModel(prev =>
           prev
             ? {
                 ...prev,
                 photoSet: { ...prev.photoSet, [position]: file },
               }
-            : null,
+            : null
         )
       }
+      
+      console.log(`✅ ${position} photo uploaded and saved to database`);
+    } catch (error) {
+      console.error(`❌ Error uploading ${position} photo:`, error);
+      alert(`Failed to upload ${position} photo. Please try again.`);
     }
-    
-    console.log('✅ Photo uploaded successfully!');
   }
 
   const handleRemovePhoto = (position: keyof PhotoSet) => {

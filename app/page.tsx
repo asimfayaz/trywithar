@@ -50,10 +50,12 @@ export default function Home() {
 
   // Check for existing authentication session on app load
   useEffect(() => {
+    let isInitialized = false
+    
     const initializeAuth = async () => {
       try {
         const currentUser = await authService.getCurrentUser()
-        if (currentUser) {
+        if (currentUser && !isInitialized) {
           setUser({
             id: currentUser.id,
             name: currentUser.name || 'User',
@@ -66,13 +68,15 @@ export default function Home() {
       } catch (error) {
         console.error('Failed to initialize auth:', error)
       } finally {
-        setIsLoading(false)
+        // Always set loading to false, regardless of success/failure
+        if (!isInitialized) {
+          setIsLoading(false)
+          isInitialized = true
+        }
       }
     }
 
-    initializeAuth()
-
-    // Set up auth state listener
+    // Set up auth state listener first
     const { data: { subscription } } = authService.onAuthStateChange((authUser) => {
       if (authUser) {
         setUser({
@@ -86,7 +90,16 @@ export default function Home() {
       } else {
         setUser(null)
       }
+      
+      // Ensure loading is set to false when auth state changes
+      if (!isInitialized) {
+        setIsLoading(false)
+        isInitialized = true
+      }
     })
+
+    // Then run initial auth check
+    initializeAuth()
 
     // Cleanup subscription on unmount
     return () => {

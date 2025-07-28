@@ -97,8 +97,8 @@ export const authService = {
       if (error) throw error
       if (!session?.user) return null
 
-      // Get user data from our billing table
-      const userData = await userService.getUserById(session.user.id)
+      // Use the session data directly to avoid circular dependency
+      const userData = await userService.getUserDataFromAuthUser(session.user)
       return userData
     } catch (error) {
       console.error('Get current user error:', error)

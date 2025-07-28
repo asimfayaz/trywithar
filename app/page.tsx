@@ -54,8 +54,12 @@ export default function Home() {
     
     const initializeAuth = async () => {
       try {
+        console.log('🔄 Initializing auth...')
         const currentUser = await authService.getCurrentUser()
+        console.log('👤 Current user from auth service:', currentUser)
+        
         if (currentUser && !isInitialized) {
+          console.log('✅ Setting user state:', currentUser.email)
           setUser({
             id: currentUser.id,
             name: currentUser.name || 'User',
@@ -64,12 +68,15 @@ export default function Home() {
             freeModelsUsed: currentUser.free_models_used,
             credits: currentUser.credits,
           })
+        } else if (!currentUser) {
+          console.log('❌ No current user found')
         }
       } catch (error) {
-        console.error('Failed to initialize auth:', error)
+        console.error('❌ Failed to initialize auth:', error)
       } finally {
         // Always set loading to false, regardless of success/failure
         if (!isInitialized) {
+          console.log('🏁 Setting loading to false, isInitialized:', isInitialized)
           setIsLoading(false)
           isInitialized = true
         }
@@ -78,7 +85,10 @@ export default function Home() {
 
     // Set up auth state listener first
     const { data: { subscription } } = authService.onAuthStateChange((authUser) => {
+      console.log('🔔 Auth state changed:', authUser ? authUser.email : 'null')
+      
       if (authUser) {
+        console.log('✅ Auth listener setting user state:', authUser.email)
         setUser({
           id: authUser.id,
           name: authUser.name || 'User',
@@ -88,11 +98,13 @@ export default function Home() {
           credits: authUser.credits,
         })
       } else {
+        console.log('❌ Auth listener clearing user state')
         setUser(null)
       }
       
       // Ensure loading is set to false when auth state changes
       if (!isInitialized) {
+        console.log('🏁 Auth listener setting loading to false')
         setIsLoading(false)
         isInitialized = true
       }
@@ -202,45 +214,46 @@ export default function Home() {
 
     console.log(`📤 Uploading ${position} photo:`, file.name)
 
-    // Update the current photo set with the original image
-    setCurrentPhotoSet((prev) => ({
-      ...prev,
-      [position]: file,
-    }))
-
-    // If no model is selected, create a new one
-    if (!selectedModel) {
+    // If uploading a front photo, always create a new model (this is the primary photo)
+    if (position === "front") {
       const newModel: ModelData = {
         id: Date.now().toString(),
         thumbnail: URL.createObjectURL(file),
         status: "uploaded",
         uploadedAt: new Date(),
-        photoSet: { [position]: file },
+        photoSet: { front: file },
       }
       setModels((prev) => [newModel, ...prev])
       setSelectedModel(newModel)
+      setCurrentPhotoSet({ front: file })
     } else {
-      // Update existing model
-      setModels((prev) =>
-        prev.map((model) =>
-          model.id === selectedModel.id
+      // For additional photos (left, right, back), update the current photo set and selected model
+      setCurrentPhotoSet((prev) => ({
+        ...prev,
+        [position]: file,
+      }))
+
+      if (selectedModel) {
+        // Update existing model with additional photo
+        setModels((prev) =>
+          prev.map((model) =>
+            model.id === selectedModel.id
+              ? {
+                  ...model,
+                  photoSet: { ...model.photoSet, [position]: file },
+                }
+              : model,
+          ),
+        )
+        setSelectedModel((prev) =>
+          prev
             ? {
-                ...model,
-                photoSet: { ...model.photoSet, [position]: file },
-                thumbnail: position === "front" ? URL.createObjectURL(file) : model.thumbnail,
+                ...prev,
+                photoSet: { ...prev.photoSet, [position]: file },
               }
-            : model,
-        ),
-      )
-      setSelectedModel((prev) =>
-        prev
-          ? {
-              ...prev,
-              photoSet: { ...prev.photoSet, [position]: file },
-              thumbnail: position === "front" ? URL.createObjectURL(file) : prev.thumbnail,
-            }
-          : null,
-      )
+            : null,
+        )
+      }
     }
     
     console.log('✅ Photo uploaded successfully!');

@@ -382,6 +382,17 @@ export const photoService = {
     return data as Photo[];
   },
 
+  // Get photos by job ID
+  async getPhotosByJobId(jobId: string) {
+    const { data, error } = await supabase
+      .from('photos')
+      .select('*')
+      .eq('job_id', jobId);
+    
+    if (error) throw error;
+    return data as Photo[];
+  },
+
   // Update a photo
   async updatePhoto(id: string, updates: Partial<Omit<Photo, 'id' | 'created_at' | 'updated_at'>>) {
     console.log('📝 Updating photo with ID:', id, 'Updates:', updates);

@@ -307,14 +307,14 @@ export function PhotoPreview({
         <p className={cn("text-sm", photoControlsDisabled ? "text-gray-400" : "text-gray-500")}>
           {photoControlsDisabled
             ? selectedModel?.status === "complete"
-              ? "Model generated successfully"
+              ? ""
               : "Generation in progress..."
             : "Upload up to 4 photos for better 3D model quality"}
         </p>
         <p className={cn("text-xs mt-1", photoControlsDisabled ? "text-gray-400" : "text-gray-400")}>
           {photoControlsDisabled
             ? selectedModel?.status === "complete"
-              ? "Photos are locked after generation"
+              ? ""
               : "Please wait while processing"
             : "Front photo is required. Left, Right, and Back are optional."}
         </p>

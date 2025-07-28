@@ -35,12 +35,13 @@ export function ImageGallery({ models, onSelectModel, selectedModelId }: ImageGa
           <div
             key={model.id}
             className={cn(
-              "relative aspect-square rounded-lg overflow-hidden cursor-pointer transition-all border-2",
+              "relative aspect-square rounded-lg overflow-hidden cursor-pointer transition-all border-2 group",
               selectedModelId === model.id
                 ? "border-blue-500 ring-2 ring-blue-200"
                 : "border-transparent hover:border-gray-300",
             )}
             onClick={() => onSelectModel(model)}
+            title={`Last updated: ${model.updatedAt.toLocaleString()}`}
           >
             <img
               src={model.thumbnail || "/placeholder.svg"}

@@ -18,6 +18,7 @@ export interface ModelData {
   status: "processing" | "complete" | "failed" | "uploaded"
   modelUrl?: string
   uploadedAt: Date
+  updatedAt: Date
   jobId?: string
   processingStage?: ProcessingStage
   photoSet: PhotoSet
@@ -156,6 +157,7 @@ export default function Home() {
           status,
           modelUrl: photo.model_url || undefined,
           uploadedAt: new Date(photo.created_at),
+          updatedAt: new Date(photo.updated_at),
           jobId: photo.job_id || undefined,
           processingStage,
           photoSet: { front: new File([], 'front.jpg') } // Placeholder for PhotoSet
@@ -221,6 +223,7 @@ export default function Home() {
         thumbnail: URL.createObjectURL(file),
         status: "uploaded",
         uploadedAt: new Date(),
+        updatedAt: new Date(),
         photoSet: { front: file },
       }
       setModels((prev) => [newModel, ...prev])

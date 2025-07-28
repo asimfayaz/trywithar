@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -22,6 +22,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import Link from "next/link"
+import { userService, type AuthUser } from "@/lib/supabase"
+import { authService } from "@/lib/auth"
 
 export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(false)
@@ -30,14 +32,29 @@ export default function SettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState("")
   const [emailNotifications, setEmailNotifications] = useState(true)
   const [marketingEmails, setMarketingEmails] = useState(false)
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [isLoadingData, setIsLoadingData] = useState(true)
 
-  // Mock user data
-  const user = {
-    name: "John Doe",
-    email: "john@example.com",
-    avatar: "/placeholder.svg?height=80&width=80",
-    joinDate: new Date("2024-01-01"),
-  }
+  // Load user data on component mount
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        // Get current authenticated user
+        const userData = await authService.getCurrentUser()
+        if (!userData) {
+          console.error('No authenticated user found')
+          return
+        }
+        setUser(userData)
+      } catch (error) {
+        console.error('Failed to load user data:', error)
+      } finally {
+        setIsLoadingData(false)
+      }
+    }
+
+    loadUserData()
+  }, [])
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -52,20 +69,66 @@ export default function SettingsPage() {
       return
     }
 
+    if (!currentPassword) {
+      alert("Please enter your current password!")
+      return
+    }
+
     setIsLoading(true)
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    alert("Password updated successfully!")
-    setCurrentPassword("")
-    setNewPassword("")
-    setConfirmPassword("")
-    setIsLoading(false)
+    try {
+      await authService.updatePassword(currentPassword, newPassword)
+      alert("Password updated successfully!")
+      setCurrentPassword("")
+      setNewPassword("")
+      setConfirmPassword("")
+    } catch (error) {
+      console.error('Password update failed:', error)
+      if (error instanceof Error) {
+        alert(`Failed to update password: ${error.message}`)
+      } else {
+        alert('Failed to update password. Please try again.')
+      }
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleDeleteAccount = async () => {
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    alert("Account deletion requested. This is a demo - no actual deletion occurred.")
+    if (!user) return
+    
+    try {
+      setIsLoading(true)
+      // In a real app, you'd call a delete API endpoint
+      // For now, just show a confirmation
+      alert("Account deletion requested. This is a demo - no actual deletion occurred.")
+    } catch (error) {
+      console.error('Failed to delete account:', error)
+      alert('Failed to delete account. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  if (isLoadingData) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading settings...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">Failed to load user data</p>
+          <Link href="/" className="text-blue-600 hover:text-blue-800">Return to Home</Link>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -94,13 +157,13 @@ export default function SettingsPage() {
           <CardContent className="space-y-6">
             <div className="flex items-center space-x-4">
               <Avatar className="w-20 h-20">
-                <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
-                <AvatarFallback className="text-lg">{user.name.charAt(0).toUpperCase()}</AvatarFallback>
+                <AvatarImage src={user.avatar_url || "/placeholder.svg"} alt={user.name || 'User'} />
+                <AvatarFallback className="text-lg">{(user.name || 'U').charAt(0).toUpperCase()}</AvatarFallback>
               </Avatar>
               <div>
                 <h3 className="text-lg font-medium">{user.name}</h3>
                 <p className="text-sm text-gray-600">{user.email}</p>
-                <p className="text-sm text-gray-500">Member since {user.joinDate.toLocaleDateString()}</p>
+                <p className="text-sm text-gray-500">Member since {new Date(user.created_at).toLocaleDateString()}</p>
               </div>
             </div>
           </CardContent>

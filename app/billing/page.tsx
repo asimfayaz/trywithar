@@ -1,23 +1,44 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import Link from "next/link"
+import { userService, photoService, type AuthUser } from "@/lib/supabase"
+import { authService } from "@/lib/auth"
 
 export default function BillingPage() {
   const [isLoading, setIsLoading] = useState(false)
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [userPhotos, setUserPhotos] = useState<any[]>([])
+  const [isLoadingData, setIsLoadingData] = useState(true)
 
-  // Mock user data
-  const user = {
-    name: "John Doe",
-    email: "john@example.com",
-    freeModelsUsed: 2,
-    credits: 5.0,
-    totalModelsGenerated: 15,
-  }
+  // Load user data on component mount
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        // Get current authenticated user
+        const userData = await authService.getCurrentUser()
+        if (!userData) {
+          console.error('No authenticated user found')
+          return
+        }
+        setUser(userData)
+        
+        // Get user's photos to calculate total models generated
+        const photos = await photoService.getPhotosByUserId(userData.id)
+        setUserPhotos(photos)
+      } catch (error) {
+        console.error('Failed to load user data:', error)
+      } finally {
+        setIsLoadingData(false)
+      }
+    }
+
+    loadUserData()
+  }, [])
 
   // Mock transaction history
   const transactions = [
@@ -65,7 +86,31 @@ export default function BillingPage() {
     setIsLoading(false)
   }
 
-  const freeModelsRemaining = Math.max(0, 2 - user.freeModelsUsed)
+  const freeModelsRemaining = user ? Math.max(0, 2 - user.free_models_used) : 0
+  const totalModelsGenerated = userPhotos.length
+  const completedModels = userPhotos.filter(photo => photo.generation_status === 'ready').length
+
+  if (isLoadingData) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading billing information...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">Failed to load user data</p>
+          <Link href="/" className="text-blue-600 hover:text-blue-800">Return to Home</Link>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -101,7 +146,7 @@ export default function BillingPage() {
                 <p className="text-sm text-gray-600">Free Models Remaining</p>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-gray-900">{user.totalModelsGenerated}</div>
+                <div className="text-3xl font-bold text-gray-900">{totalModelsGenerated}</div>
                 <p className="text-sm text-gray-600">Total Models Generated</p>
               </div>
             </div>

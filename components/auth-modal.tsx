@@ -9,11 +9,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { authService, type AuthUser } from "@/lib/auth"
 
 interface AuthModalProps {
   isOpen: boolean
   onClose: () => void
-  onLogin: (email: string, password: string) => void
+  onLogin: (user: AuthUser) => void
   reason?: string | null
 }
 
@@ -24,41 +25,82 @@ export function AuthModal({ isOpen, onClose, onLogin, reason }: AuthModalProps) 
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [name, setName] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (showForgotPassword) {
-      // Handle forgot password
-      alert("Password reset link sent to your email!")
+    setError(null)
+    setIsLoading(true)
+
+    try {
+      if (showForgotPassword) {
+        // Handle forgot password
+        await authService.resetPassword(email)
+        alert("Password reset link sent to your email!")
+        setShowForgotPassword(false)
+        setEmail("")
+        return
+      }
+
+      if (isSignUp) {
+        // Handle sign up
+        if (password !== confirmPassword) {
+          setError("Passwords don't match!")
+          return
+        }
+        if (password.length < 8) {
+          setError("Password must be at least 8 characters long")
+          return
+        }
+        if (!name.trim()) {
+          setError("Name is required")
+          return
+        }
+
+        const user = await authService.signUp({ email, password, name: name.trim() })
+        onLogin(user)
+      } else {
+        // Handle sign in
+        const user = await authService.signIn({ email, password })
+        onLogin(user)
+      }
+
+      // Reset form on success
+      setEmail("")
+      setPassword("")
+      setConfirmPassword("")
+      setName("")
+      setIsSignUp(false)
       setShowForgotPassword(false)
-      return
+    } catch (error) {
+      console.error('Auth error:', error)
+      setError(error instanceof Error ? error.message : 'Authentication failed')
+    } finally {
+      setIsLoading(false)
     }
-
-    if (isSignUp && password !== confirmPassword) {
-      alert("Passwords don't match!")
-      return
-    }
-
-    onLogin(email, password)
-    // Reset form
-    setEmail("")
-    setPassword("")
-    setConfirmPassword("")
-    setName("")
-    setIsSignUp(false)
-    setShowForgotPassword(false)
   }
 
-  const handleGoogleSignIn = () => {
-    // Placeholder for Google OAuth
-    console.log("Google sign in clicked")
-    onLogin("google@example.com", "google-auth")
+  const handleGoogleSignIn = async () => {
+    try {
+      setError(null)
+      await authService.signInWithGoogle()
+      // The redirect will handle the rest
+    } catch (error) {
+      console.error('Google sign in error:', error)
+      setError('Failed to sign in with Google')
+    }
   }
 
-  const handleGitHubSignIn = () => {
-    // Placeholder for GitHub OAuth
-    console.log("GitHub sign in clicked")
-    onLogin("github@example.com", "github-auth")
+  const handleGitHubSignIn = async () => {
+    try {
+      setError(null)
+      await authService.signInWithGitHub()
+      // The redirect will handle the rest
+    } catch (error) {
+      console.error('GitHub sign in error:', error)
+      setError('Failed to sign in with GitHub')
+    }
   }
 
   return (
@@ -68,17 +110,19 @@ export function AuthModal({ isOpen, onClose, onLogin, reason }: AuthModalProps) 
           <DialogTitle>{showForgotPassword ? "Reset Password" : isSignUp ? "Create Account" : "Sign In"}</DialogTitle>
         </DialogHeader>
 
-        {reason && (
-          <Alert className="mb-4">
+        {(reason || error) && (
+          <Alert className={`mb-4 ${error ? 'border-red-200 bg-red-50' : ''}`}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={2}
-                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                d={error ? "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" : "M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"}
               />
             </svg>
-            <AlertDescription>{reason}</AlertDescription>
+            <AlertDescription className={error ? 'text-red-700' : ''}>
+              {error || reason}
+            </AlertDescription>
           </Alert>
         )}
 
@@ -167,8 +211,15 @@ export function AuthModal({ isOpen, onClose, onLogin, reason }: AuthModalProps) 
             </div>
           )}
 
-          <Button type="submit" className="w-full">
-            {showForgotPassword ? "Send Reset Link" : isSignUp ? "Create Account" : "Sign In"}
+          <Button type="submit" className="w-full" disabled={isLoading}>
+            {isLoading ? (
+              <div className="flex items-center space-x-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <span>Loading...</span>
+              </div>
+            ) : (
+              showForgotPassword ? "Send Reset Link" : isSignUp ? "Create Account" : "Sign In"
+            )}
           </Button>
 
           {!showForgotPassword && (

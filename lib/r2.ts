@@ -1,0 +1,117 @@
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+
+// Validate environment variables
+function getEnvVar(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+}
+
+// R2 Client Setup
+const accountId = getEnvVar('R2_ACCOUNT_ID');
+const accessKeyId = getEnvVar('R2_ACCESS_KEY_ID');
+const secretAccessKey = getEnvVar('R2_SECRET_ACCESS_KEY');
+
+const r2Client = new S3Client({
+  region: "auto",
+  endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+  credentials: {
+    accessKeyId,
+    secretAccessKey,
+  },
+});
+
+type BucketType = 'photos' | 'models-glb';
+
+export const r2Service = {
+  /**
+   * Upload a file to the specified R2 bucket
+   */
+  async uploadFile(
+    bucket: BucketType,
+    key: string,
+    file: Buffer | Uint8Array | Blob | string,
+    contentType: string
+  ): Promise<{ url: string; key: string }> {
+    const bucketName = bucket === 'photos' 
+      ? getEnvVar('R2_PHOTOS_BUCKET')
+      : getEnvVar('R2_MODELS_BUCKET');
+
+    const command = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+      Body: file,
+      ContentType: contentType,
+    });
+
+    await r2Client.send(command);
+    
+    // Generate a public URL for the uploaded file
+    const publicUrlBase = process.env.R2_PUBLIC_URL || '';
+    const publicUrl = publicUrlBase.startsWith('http') 
+      ? `${publicUrlBase}/${key}`
+      : `https://${publicUrlBase}/${key}`;
+    
+    return {
+      url: publicUrl,
+      key,
+    };
+  },
+
+  /**
+   * Generate a pre-signed URL for a file
+   */
+  async getSignedUrl(bucket: BucketType, key: string, expiresIn = 3600): Promise<string> {
+    const bucketName = bucket === 'photos' 
+      ? getEnvVar('R2_PHOTOS_BUCKET')
+      : getEnvVar('R2_MODELS_BUCKET');
+
+    const command = new GetObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    });
+
+    return getSignedUrl(r2Client, command, { expiresIn });
+  },
+
+  /**
+   * Generate a unique key for a file
+   */
+  generateKey(prefix: string, originalName: string): string {
+    const timestamp = Date.now();
+    const extension = originalName.split('.').pop();
+    const randomString = Math.random().toString(36).substring(2, 8);
+    
+    return `${prefix}/${timestamp}-${randomString}.${extension}`;
+  },
+
+  /**
+   * Upload a photo to the photos bucket
+   */
+  async uploadPhoto(file: Buffer, originalName: string) {
+    const key = this.generateKey('uploads', originalName);
+    return this.uploadFile('photos', key, file, 'image/jpeg');
+  },
+
+  /**
+   * Upload a 3D model to the models bucket
+   */
+  async uploadModel(file: Buffer, originalName: string) {
+    const key = this.generateKey('models', originalName);
+    return this.uploadFile('models-glb', key, file, 'model/gltf-binary');
+  },
+
+  /**
+   * Get a public URL for a file
+   */
+  getPublicUrl(bucket: BucketType, key: string): string {
+    const bucketDomain = getEnvVar('R2_PUBLIC_URL');
+    
+    return bucketDomain.startsWith('http') 
+      ? `${bucketDomain}/${key}`
+      : `https://${bucketDomain}/${key}`;
+  }
+};

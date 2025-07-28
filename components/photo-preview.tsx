@@ -16,7 +16,7 @@ interface PhotoPreviewProps {
   onGenerate?: () => void
   canGenerate?: boolean
   isGenerating?: boolean
-  processingStage?: "uploaded" | "processing" | "generating" | "ready"
+  processingStage?: "uploaded" | "processing" | "generating" | "ready" | "removing_background"
   modelUrl?: string
   selectedModel?: any
 }
@@ -30,10 +30,21 @@ const positions = [
 
 const stages = [
   { key: "uploaded", label: "Photo uploaded", icon: "📤" },
+  { key: "removing_background", label: "Removing background", icon: "🎨" },
   { key: "processing", label: "Processing image", icon: "🔄" },
   { key: "generating", label: "Generating 3D model", icon: "🎯" },
   { key: "ready", label: "Model ready", icon: "✅" },
 ]
+
+// Helper function to get image source from either File object or URL string
+const getImageSrc = (photo: File): string => {
+  // If the File object has a name that looks like a URL, use it directly
+  if (photo.name && (photo.name.startsWith('http') || photo.name.startsWith('/'))) {
+    return photo.name
+  }
+  // Otherwise, create object URL for actual File objects
+  return URL.createObjectURL(photo)
+}
 
 export function PhotoPreview({
   photoSet,
@@ -150,7 +161,7 @@ export function PhotoPreview({
                 {photo ? (
                   <div className="relative aspect-square w-full h-full">
                     <img
-                      src={URL.createObjectURL(photo) || "/placeholder.svg"}
+                      src={getImageSrc(photo)}
                       alt={`${label} view`}
                       className="w-full h-full object-cover rounded-lg"
                     />

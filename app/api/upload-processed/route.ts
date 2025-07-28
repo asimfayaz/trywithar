@@ -34,18 +34,10 @@ export async function POST(request: Request) {
     const fileExtension = file.name.split('.').pop() || 'png';
     const uniqueFileName = `${uuidv4()}.${fileExtension}`;
     
-    // Determine the upload path based on whether it's background-removed or original
-    const uploadPath = isProcessed 
-      ? `nobgr/${uniqueFileName}` 
-      : `original/${uniqueFileName}`;
-    
-    // Upload to the photos bucket
-    const uploadResult = await r2Service.uploadFile(
-      'photos', // Bucket name
-      uploadPath, // Key
-      fileData, // File data as Uint8Array
-      file.type // Content type
-    );
+    // Upload using the appropriate R2 service method
+    const uploadResult = isProcessed 
+      ? await r2Service.uploadProcessedPhoto(Buffer.from(fileData), uniqueFileName)
+      : await r2Service.uploadPhoto(Buffer.from(fileData), uniqueFileName);
     
     console.log('File uploaded to R2:', uploadResult);
 
@@ -57,7 +49,7 @@ export async function POST(request: Request) {
         originalFileName: file.name,
         uploadedFileName: uniqueFileName,
         url: uploadResult.url,
-        key: uploadPath,
+        key: uploadResult.key,
         isProcessed,
       },
     });

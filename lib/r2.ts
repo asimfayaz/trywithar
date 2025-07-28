@@ -89,10 +89,18 @@ export const r2Service = {
   },
 
   /**
-   * Upload a photo to the photos bucket
+   * Upload an original photo to the photos bucket
    */
   async uploadPhoto(file: Buffer, originalName: string) {
-    const key = this.generateKey('uploads', originalName);
+    const key = this.generateKey('original', originalName);
+    return this.uploadFile('photos', key, file, 'image/jpeg');
+  },
+
+  /**
+   * Upload a no-background photo to the photos bucket
+   */
+  async uploadProcessedPhoto(file: Buffer, originalName: string) {
+    const key = this.generateKey('nobgr', originalName);
     return this.uploadFile('photos', key, file, 'image/jpeg');
   },
 
@@ -100,7 +108,12 @@ export const r2Service = {
    * Upload a 3D model to the models bucket
    */
   async uploadModel(file: Buffer, originalName: string) {
-    const key = this.generateKey('models', originalName);
+    // Store models at bucket root, not in subfolder
+    const timestamp = Date.now();
+    const extension = originalName.split('.').pop();
+    const randomString = Math.random().toString(36).substring(2, 8);
+    const key = `${timestamp}-${randomString}.${extension}`;
+    
     return this.uploadFile('models-glb', key, file, 'model/gltf-binary');
   },
 

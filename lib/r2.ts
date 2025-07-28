@@ -56,11 +56,8 @@ export const r2Service = {
 
     await r2Client.send(command);
     
-    // Generate a public URL for the uploaded file
-    const publicUrlBase = process.env.R2_PUBLIC_URL || '';
-    const publicUrl = publicUrlBase.startsWith('http') 
-      ? `${publicUrlBase}/${key}`
-      : `https://${publicUrlBase}/${key}`;
+    // Generate a public URL for the uploaded file using the centralized method
+    const publicUrl = this.getPublicUrl(bucket, key);
     
     return {
       url: publicUrl,
@@ -134,20 +131,17 @@ export const r2Service = {
     // Use the appropriate public URL based on the bucket type
     let baseUrl = bucket === 'models-glb' ? publicModelsUrl : publicPhotosUrl;
     
-    // Ensure the base URL has the correct protocol
+    // Ensure the base URL has the correct protocol and no trailing slash
     if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
       baseUrl = `https://${baseUrl}`;
     }
+    baseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
     
-    // For models, remove any path segments (they should be at root)
     // For photos, preserve the folder structure (e.g., 'original/' or 'nobgr/')
-    const cleanKey = bucket === 'models-glb' 
-      ? key.split('/').pop() || key
-      : key;
+    // For models, use the key as-is since it's already at the root
+    const cleanKey = key.startsWith('/') ? key.substring(1) : key;
     
-    // Ensure the URL is properly formatted
-    return baseUrl.endsWith('/') 
-      ? `${baseUrl}${cleanKey}`
-      : `${baseUrl}/${cleanKey}`;
+    // Construct the full URL
+    return `${baseUrl}/${cleanKey}`;
   }
 };

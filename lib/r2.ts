@@ -2,8 +2,11 @@ import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 // Validate environment variables
-function getEnvVar(name: string): string {
-  const value = process.env[name];
+function getEnvVar(name: string, isPublic = false): string {
+  const value = isPublic 
+    ? process.env[`NEXT_PUBLIC_${name}`] || process.env[name]
+    : process.env[name];
+  
   if (!value) {
     throw new Error(`Missing required environment variable: ${name}`);
   }
@@ -14,6 +17,10 @@ function getEnvVar(name: string): string {
 const accountId = getEnvVar('R2_ACCOUNT_ID');
 const accessKeyId = getEnvVar('R2_ACCESS_KEY_ID');
 const secretAccessKey = getEnvVar('R2_SECRET_ACCESS_KEY');
+
+// Get public URLs with fallbacks
+const publicPhotosUrl = getEnvVar('R2_PUBLIC_PHOTOS_URL', true);
+const publicModelsUrl = getEnvVar('R2_PUBLIC_MODELS_URL', true);
 
 const r2Client = new S3Client({
   region: "auto",
@@ -108,10 +115,10 @@ export const r2Service = {
    * Upload a 3D model to the models bucket
    */
   async uploadModel(file: Buffer, originalName: string) {
-    // Store models at bucket root, not in subfolder
     const timestamp = Date.now();
     const extension = originalName.split('.').pop();
     const randomString = Math.random().toString(36).substring(2, 8);
+    // Generate a simple filename without any prefix
     const key = `${timestamp}-${randomString}.${extension}`;
     
     return this.uploadFile('models-glb', key, file, 'model/gltf-binary');
@@ -119,12 +126,28 @@ export const r2Service = {
 
   /**
    * Get a public URL for a file
+   * @param bucket The bucket type ('photos' or 'models-glb')
+   * @param key The file key (may include prefixes for photos)
+   * @returns The full public URL to access the file
    */
   getPublicUrl(bucket: BucketType, key: string): string {
-    const bucketDomain = getEnvVar('R2_PUBLIC_URL');
+    // Use the appropriate public URL based on the bucket type
+    let baseUrl = bucket === 'models-glb' ? publicModelsUrl : publicPhotosUrl;
     
-    return bucketDomain.startsWith('http') 
-      ? `${bucketDomain}/${key}`
-      : `https://${bucketDomain}/${key}`;
+    // Ensure the base URL has the correct protocol
+    if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+      baseUrl = `https://${baseUrl}`;
+    }
+    
+    // For models, remove any path segments (they should be at root)
+    // For photos, preserve the folder structure (e.g., 'original/' or 'nobgr/')
+    const cleanKey = bucket === 'models-glb' 
+      ? key.split('/').pop() || key
+      : key;
+    
+    // Ensure the URL is properly formatted
+    return baseUrl.endsWith('/') 
+      ? `${baseUrl}${cleanKey}`
+      : `${baseUrl}/${cleanKey}`;
   }
 };

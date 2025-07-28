@@ -34,9 +34,9 @@ export async function POST(request: Request) {
     const fileExtension = file.name.split('.').pop() || 'png';
     const uniqueFileName = `${uuidv4()}.${fileExtension}`;
     
-    // Determine the upload path based on whether it's processed or original
+    // Determine the upload path based on whether it's background-removed or original
     const uploadPath = isProcessed 
-      ? `processed/${uniqueFileName}` 
+      ? `nobgr/${uniqueFileName}` 
       : `original/${uniqueFileName}`;
     
     // Upload to the photos bucket

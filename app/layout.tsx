@@ -3,8 +3,8 @@ import type { Metadata } from "next"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "3D Model Generator",
-  description: "Convert your photos into 3D models",
+  title: "Try with AR",
+  description: "Convert any product photo to 3D and visualize it with AR before you buy/move it",
     generator: 'v0.dev'
 }
 

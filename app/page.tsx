@@ -217,11 +217,23 @@ export default function Home() {
     console.log(`📤 Uploading ${position} photo:`, file.name)
 
     try {
-      // First upload the file to R2
-      const { uploadFile } = await import('@/lib/r2')
-      const uploadResult = await uploadFile('photos', file.name, file, file.type)
+      // Upload file via API route
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('originalName', file.name)
+
+      const response = await fetch('/api/upload-photo', {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to upload photo')
+      }
+
+      const uploadResult = await response.json()
       
-      console.log(`✅ File uploaded to R2: ${uploadResult.url}`)
+      console.log(`✅ File uploaded via API: ${uploadResult.url}`)
 
       // If uploading a front photo, create a new model
       if (position === "front") {
@@ -229,7 +241,7 @@ export default function Home() {
         const photoData = {
           user_id: user.id,
           front_image_url: uploadResult.url,
-          generation_status: 'pending'
+          generation_status: 'pending' as const
         }
         
         const newPhoto = await photoService.createPhoto(photoData)
@@ -904,7 +916,7 @@ export default function Home() {
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">3D Model Generator</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Try with AR</h1>
           <UserDashboard user={user} onLogin={() => setShowAuthModal(true)} onLogout={handleLogout} />
         </div>
       </header>

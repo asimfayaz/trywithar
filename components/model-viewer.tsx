@@ -1,16 +1,23 @@
 "use client"
 
-import { Suspense, useState, useEffect } from "react"
-import { Canvas } from "@react-three/fiber"
-import { OrbitControls, useGLTF, Environment } from "@react-three/drei"
+import React from "react"
+import { useState, useEffect } from "react"
+import type { ModelViewerJSX } from "@/types/model-viewer"
 
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      'model-viewer': ModelViewerJSX & React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement>
+    }
+  }
+}
 interface ModelViewerProps {
   modelUrl: string
-}
-
-function Model({ url }: { url: string }) {
-  const { scene } = useGLTF(url)
-  return <primitive object={scene} scale={2} />
+  /**
+   * URL for a poster image to display while the model loads
+   * @default "/placeholder.svg"
+   */
+  poster?: string
 }
 
 function ModelLoadingFallback() {
@@ -41,11 +48,25 @@ function ModelErrorFallback() {
   )
 }
 
-export function ModelViewer({ modelUrl }: ModelViewerProps) {
+export function ModelViewer({ modelUrl, poster = "/placeholder.svg" }: ModelViewerProps) {
   const [modelError, setModelError] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [modelViewerLoaded, setModelViewerLoaded] = useState(false)
 
-  // Check if model URL is accessible
+  // Check if model-viewer is loaded and model URL is accessible
+  useEffect(() => {
+    const checkModelViewer = () => {
+      if (typeof window !== 'undefined' && customElements.get('model-viewer')) {
+        setModelViewerLoaded(true)
+      } else {
+        // Wait a bit more for model-viewer to load
+        setTimeout(checkModelViewer, 100)
+      }
+    }
+
+    checkModelViewer()
+  }, [])
+
   useEffect(() => {
     const checkModelUrl = async () => {
       try {
@@ -62,13 +83,13 @@ export function ModelViewer({ modelUrl }: ModelViewerProps) {
       }
     }
 
-    if (modelUrl) {
+    if (modelUrl && modelViewerLoaded) {
       checkModelUrl()
     }
-  }, [modelUrl])
+  }, [modelUrl, modelViewerLoaded])
 
-  // Show loading state
-  if (isLoading) {
+  // Show loading state while model-viewer is loading or model is being checked
+  if (!modelViewerLoaded || isLoading) {
     return <ModelLoadingFallback />
   }
 
@@ -77,18 +98,48 @@ export function ModelViewer({ modelUrl }: ModelViewerProps) {
     return <ModelErrorFallback />
   }
 
+  const handleLoad = () => {
+    setIsLoading(false)
+    setModelError(false)
+  }
+
+  const handleError = () => {
+    setModelError(true)
+    setIsLoading(false)
+  }
+
   return (
-    <div className="w-full h-96 rounded-lg overflow-hidden bg-gray-100">
-      <Canvas camera={{ position: [0, 0, 5], fov: 50 }}>
-        <Suspense fallback={null}>
-          <Environment preset="studio" />
-          <Model url={modelUrl} />
-          <OrbitControls enablePan={true} enableZoom={true} enableRotate={true} minDistance={2} maxDistance={10} />
-        </Suspense>
-      </Canvas>
+    <div className="w-full">
+      <div className="w-full h-96 rounded-lg overflow-hidden bg-gray-100">
+{/* @ts-ignore */}
+<model-viewer
+  src={modelUrl}
+  alt="Generated 3D model"
+  camera-controls
+  touch-action="pan-y"
+  shadow-intensity="1"
+  auto-rotate
+  auto-rotate-delay="3000"
+  rotation-per-second="30deg"
+  interaction-prompt="auto"
+  ar
+  ar-modes="webxr scene-viewer quick-look"
+  ar-scale="auto"
+  poster={poster}
+  style={{
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#f3f4f6'
+  }}
+  onLoad={handleLoad}
+  onError={handleError}
+/>
+      </div>
 
       <div className="mt-4 text-center">
-        <p className="text-sm text-gray-600">Click and drag to rotate • Scroll to zoom • Right-click to pan</p>
+        <p className="text-sm text-gray-600">
+          Click and drag to rotate • Scroll to zoom • Touch to interact
+        </p>
       </div>
     </div>
   )

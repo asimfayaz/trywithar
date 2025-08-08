@@ -304,23 +304,11 @@ export const jobService = {
 // Photo service
 export const photoService = {
   // Create a new photo entry
-  async createPhoto(photoData: Omit<Photo, 'id' | 'created_at' | 'updated_at'>) {
+  async createPhoto(photoData: Omit<Photo, 'id' | 'created_at' | 'updated_at'> & {
+    processing_stage?: string;
+    expires_at?: string;
+  }) {
     console.log('🔍 Creating photo with data:', JSON.stringify(photoData, null, 2));
-    
-    // Debug Supabase client configuration
-    console.log('🔧 Supabase client config:', {
-      url: process.env.NEXT_PUBLIC_SUPABASE_URL ? 'SET' : 'MISSING',
-      anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'SET' : 'MISSING',
-      clientExists: !!supabase
-    });
-    
-    // Check authentication status
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    console.log('🔐 Auth session:', {
-      hasSession: !!session,
-      userId: session?.user?.id,
-      sessionError: sessionError?.message
-    });
     
     console.log('📡 About to make Supabase insert call...');
     const { data, error } = await supabase
@@ -382,6 +370,18 @@ export const photoService = {
     return data as Photo[];
   },
 
+  // Get photos by processing stage
+  async getPhotosByStage(stages: string[]) {
+    const { data, error } = await supabase
+      .from('photos')
+      .select('*')
+      .in('processing_stage', stages)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    return data as Photo[];
+  },
+
   // Get photos by job ID
   async getPhotosByJobId(jobId: string) {
     const { data, error } = await supabase
@@ -394,7 +394,10 @@ export const photoService = {
   },
 
   // Update a photo
-  async updatePhoto(id: string, updates: Partial<Omit<Photo, 'id' | 'created_at' | 'updated_at'>>) {
+  async updatePhoto(id: string, updates: Partial<Omit<Photo, 'id' | 'created_at' | 'updated_at'>> & {
+    processing_stage?: string;
+    expires_at?: string;
+  }) {
     console.log('📝 Updating photo with ID:', id, 'Updates:', updates);
     
     // First check if the photo exists

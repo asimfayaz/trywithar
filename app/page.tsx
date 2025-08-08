@@ -9,17 +9,34 @@ import { UserDashboard } from "@/components/user-dashboard"
 import { PhotoPreview } from "@/components/photo-preview"
 
 import { photoService } from "@/lib/supabase"
+import { StorageService } from "@/lib/storage.service"
 
-type ProcessingStage = "uploaded" | "removing_background" | "processing" | "generating" | "ready";
+export type UploadItem = File | { 
+  url: string; 
+  expiresAt?: Date; 
+  isTemporary?: boolean 
+};
+
+type ProcessingStage = 
+  "uploaded" |
+  "processing" | 
+  "removing_background" |
+  "generating" | 
+  "ready" |
+  "failed" |
+  "original_persisting" |
+  "background_removal";
 
 export interface ModelData {
+  isTemporary?: boolean
+  expiresAt?: Date
   id: string
   thumbnail: string
   status: "processing" | "complete" | "failed" | "uploaded"
   modelUrl?: string
   uploadedAt: Date
   updatedAt: Date
-  jobId?: string
+  jobId?: string | null  // Allow null values
   processingStage?: ProcessingStage
   photoSet: PhotoSet
 }
@@ -34,10 +51,10 @@ export interface User {
 }
 
 export interface PhotoSet {
-  front?: File
-  left?: File
-  right?: File
-  back?: File
+  front?: UploadItem
+  left?: UploadItem
+  right?: UploadItem
+  back?: UploadItem
 }
 
 export default function Home() {
@@ -123,52 +140,57 @@ export default function Home() {
   const [models, setModels] = useState<ModelData[]>([])
 
   // Function to load user's photos from database
-  const loadUserPhotos = async () => {
-    if (!user) return
-    
-    try {
-      const photos = await photoService.getPhotosByUserId(user.id)
+    const loadUserPhotos = async () => {
+      if (!user) return
       
-      const modelData: ModelData[] = photos.map(photo => {
-        // Map database status to ModelData status
-        let status: "processing" | "complete" | "failed" | "uploaded"
-        let processingStage: ProcessingStage | undefined
+      try {
+        const photos = await photoService.getPhotosByUserId(user.id)
         
-        switch (photo.generation_status) {
-          case 'completed':
-            status = 'complete'
-            break
-          case 'processing':
-            status = 'processing'
-            processingStage = 'generating'
-            break
-          case 'failed':
-            status = 'failed'
-            break
-          case 'pending':
-          default:
-            status = 'uploaded'
-            processingStage = 'uploaded'
-        }
+        // Sort photos by created_at in descending order (newest first)
+        photos.sort((a, b) => 
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
         
-        return {
-          id: photo.id,
-          thumbnail: photo.front_image_url || '/placeholder.svg?height=150&width=150',
-          status,
-          modelUrl: photo.model_url || undefined,
-          uploadedAt: new Date(photo.created_at),
-          updatedAt: new Date(photo.updated_at),
-          jobId: photo.job_id || undefined,
-          processingStage,
-          photoSet: { front: new File([], 'front.jpg') } // Placeholder for PhotoSet
-        }
-      })
-      
-      setModels(modelData)
-    } catch (error) {
-      console.error('Failed to load user photos:', error)
+        const modelData: ModelData[] = photos.map(photo => {
+          // Map database status to ModelData status
+          let status: "processing" | "complete" | "failed" | "uploaded"
+          let processingStage: ProcessingStage | undefined
+          
+          switch (photo.generation_status) {
+            case 'completed':
+              status = 'complete'
+              break
+            case 'processing':
+              status = 'processing'
+              processingStage = 'generating'
+              break
+            case 'failed':
+              status = 'failed'
+              break
+            case 'pending':
+            default:
+              status = 'uploaded'
+              processingStage = 'uploaded'
+          }
+          
+          return {
+            id: photo.id,
+            thumbnail: photo.front_image_url || '/placeholder.svg?height=150&width=150',
+            status,
+            modelUrl: photo.model_url || undefined,
+            uploadedAt: new Date(photo.created_at),
+            updatedAt: new Date(photo.updated_at),
+            jobId: photo.job_id || undefined,
+            processingStage,
+            photoSet: { front: new File([], 'front.jpg') } // Placeholder for PhotoSet
+          }
+        })
+        
+        setModels(modelData)
+      } catch (error) {
+        console.error('Failed to load user photos:', error)
+      }
     }
-  }
 
   // Load photos when user changes
   useEffect(() => {
@@ -207,98 +229,143 @@ export default function Home() {
     setIsGenerating(false)
   }
 
-  const handleUpload = async (file: File, position: keyof PhotoSet = "front") => {
+  const handleUpload = async (file: File | UploadItem, position: keyof PhotoSet = "front") => {
     if (!user) {
-      setAuthReason("You need to sign in to upload photos")
-      setShowAuthModal(true)
-      return
+      setAuthReason("You need to sign in to upload photos");
+      setShowAuthModal(true);
+      return;
     }
 
-    console.log(`📤 Uploading ${position} photo:`, file.name)
+    // Handle URL-based items (Phase 3 implementation)
+    if (typeof file !== 'object' || !(file instanceof File)) {
+      console.log(`📤 Handling URL-based ${position} photo upload`);
+      const uploadItem = file as { url: string; expiresAt?: Date; isTemporary?: boolean };
+      
+      // Set default expiration (24 hours from now) for temporary items
+      const expiresAt = uploadItem.expiresAt || new Date(Date.now() + 24 * 60 * 60 * 1000);
+      
+      if (position === "front") {
+        const newModel: ModelData = {
+          id: crypto.randomUUID(),
+          thumbnail: uploadItem.url,
+          status: "uploaded",
+          uploadedAt: new Date(),
+          updatedAt: new Date(),
+          photoSet: { front: { ...uploadItem, expiresAt } },
+          processingStage: 'uploaded',
+          isTemporary: uploadItem.isTemporary ?? true,
+          expiresAt
+        };
+        setModels((prev) => [...prev, newModel]);
+        setSelectedModel(newModel);
+        setCurrentPhotoSet({ front: { ...uploadItem, expiresAt } });
+      } else if (selectedModel) {
+        const updatedItem = { ...uploadItem, expiresAt };
+        setCurrentPhotoSet(prev => ({ ...prev, [position]: updatedItem }));
+        setModels(prev => prev.map(model => 
+          model.id === selectedModel.id
+            ? { 
+                ...model, 
+                photoSet: { ...model.photoSet, [position]: updatedItem },
+                isTemporary: true,
+                expiresAt
+              }
+            : model
+        ));
+        setSelectedModel(prev => prev ? 
+          { 
+            ...prev, 
+            photoSet: { ...prev.photoSet, [position]: updatedItem },
+            isTemporary: true,
+            expiresAt
+          } 
+          : null
+        );
+      }
+      return;
+    }
+
+    // Handle File uploads
+    console.log(`📤 Handling ${position} photo upload:`, file.name);
 
     try {
-      // Upload file via API route
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('originalName', file.name)
-
-      const response = await fetch('/api/upload-photo', {
-        method: 'POST',
-        body: formData
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to upload photo')
-      }
-
-      const uploadResult = await response.json()
+      // Store file temporarily in IndexedDB with expiration (24 hours)
+      const storage = new StorageService();
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await storage.storeDraft(position, file, expiresAt);
       
-      console.log(`✅ File uploaded via API: ${uploadResult.url}`)
-
-      // If uploading a front photo, create a new model
+      // Update UI state
       if (position === "front") {
-        // Create photo in database
-        const photoData = {
-          user_id: user.id,
-          front_image_url: uploadResult.url,
-          generation_status: 'pending' as const
-        }
-        
-        const newPhoto = await photoService.createPhoto(photoData)
-        
         const newModel: ModelData = {
-          id: newPhoto.id,
+          id: crypto.randomUUID(),
           thumbnail: URL.createObjectURL(file),
           status: "uploaded",
-          uploadedAt: new Date(newPhoto.created_at),
-          updatedAt: new Date(newPhoto.updated_at),
+          uploadedAt: new Date(),
+          updatedAt: new Date(),
           photoSet: { front: file },
-        }
-
-        setModels((prev) => [...prev, newModel])
-        setSelectedModel(newModel)
-        setCurrentPhotoSet({ front: file })
+          processingStage: 'uploaded',
+          isTemporary: true,
+          expiresAt
+        };
+        setModels((prev) => [...prev, newModel]);
+        setSelectedModel(newModel);
+        setCurrentPhotoSet({ front: file });
       } else if (selectedModel) {
-        // For other positions, update the existing photo
-        const updates: any = {}
-        if (position === 'left') updates.left_image_url = uploadResult.url
-        else if (position === 'right') updates.right_image_url = uploadResult.url
-        else if (position === 'back') updates.back_image_url = uploadResult.url
-        
-        // Update the photo in database
-        await photoService.updatePhoto(selectedModel.id, updates)
-        
-        // Update local state
-        setCurrentPhotoSet(prev => ({
-          ...prev,
-          [position]: file,
-        }))
-
-        setModels(prev =>
-          prev.map(model =>
-            model.id === selectedModel.id
-              ? {
-                  ...model,
-                  photoSet: { ...model.photoSet, [position]: file },
-                }
-              : model
-          )
-        )
-        
-        setSelectedModel(prev =>
-          prev
-            ? {
-                ...prev,
-                photoSet: { ...prev.photoSet, [position]: file },
+        setCurrentPhotoSet(prev => ({ ...prev, [position]: file }));
+        setModels(prev => prev.map(model => 
+          model.id === selectedModel.id
+            ? { 
+                ...model, 
+                photoSet: { ...model.photoSet, [position]: file },
+                isTemporary: true,
+                expiresAt
               }
-            : null
-        )
+            : model
+        ));
+        setSelectedModel(prev => prev ? 
+          { 
+            ...prev, 
+            photoSet: { ...prev.photoSet, [position]: file },
+            isTemporary: true,
+            expiresAt
+          } 
+          : null
+        );
       }
       
-      console.log(`✅ ${position} photo uploaded and saved to database`);
+      console.log(`✅ ${position} photo stored as draft with expiration at ${expiresAt}`);
     } catch (error) {
-      console.error(`❌ Error uploading ${position} photo:`, error);
-      alert(`Failed to upload ${position} photo. Please try again.`);
+      console.error(`❌ Error storing ${position} photo draft:`, error);
+      
+      // Enhanced error handling
+      if (error instanceof Error && error.message.includes('QuotaExceededError')) {
+        alert('Storage limit reached. Please remove some drafts or upload fewer photos.');
+      } else {
+        alert(`Failed to store ${position} photo. Please try again.`);
+      }
+      
+      // Rollback state changes on error
+      if (position === "front") {
+        setModels(prev => prev.filter(m => m.id !== selectedModel?.id));
+        setSelectedModel(null);
+        setCurrentPhotoSet({});
+      } else if (selectedModel) {
+        setCurrentPhotoSet(prev => {
+          const newSet = { ...prev };
+          delete newSet[position];
+          return newSet;
+        });
+        setModels(prev => prev.map(model => 
+          model.id === selectedModel.id
+            ? { 
+                ...model, 
+                photoSet: { ...model.photoSet },
+                isTemporary: model.isTemporary,
+                expiresAt: model.expiresAt
+              }
+            : model
+        ));
+      }
     }
   }
 
@@ -364,278 +431,207 @@ export default function Home() {
 
   const handleGenerateModel = async () => {
     if (!user) {
-      setAuthReason("Please sign in to generate 3D models.")
-      setShowAuthModal(true)
-      return
+      setAuthReason("Please sign in to generate 3D models.");
+      setShowAuthModal(true);
+      return;
     }
 
     if (!currentPhotoSet.front || !selectedModel) {
-      alert("Please select a model with a front image to generate a 3D model.")
-      return
+      alert("Please select a model with a front image to generate a 3D model.");
+      return;
     }
 
     // Check quota
     if (user.freeModelsUsed >= 2 && user.credits < 1) {
-      alert("You have reached your free quota. Please add credits to continue.")
-      return
+      alert("You have reached your free quota. Please add credits to continue.");
+      return;
     }
 
     setIsGenerating(true);
   
-  // Show initial progress state immediately
-  setModels(prev =>
-    prev.map(model =>
-      model.id === selectedModel.id 
-        ? { 
-            ...model, 
-            status: 'processing',
-            processingStage: 'uploaded',
-          } 
-        : model
-    )
-  );
-  setSelectedModel(prev => 
-    prev?.id === selectedModel.id 
-      ? { 
-          ...prev, 
-          status: 'processing',
-          processingStage: 'uploaded',
-        } 
-      : prev
-  );
-  
-  // Import Supabase job utilities
-  // Using photoService instead of jobs module
-  
-  // Create a job ID if one doesn't exist
-  const jobId = selectedModel.jobId || crypto.randomUUID();
-
-  try {
-    console.log('🎆 Starting 3D model generation process...');
-    
-    // Step 1: Upload raw image to R2 first
-    console.log('📤 Uploading raw image to R2...');
-    console.log('📤 Front image file details:', {
-      name: currentPhotoSet.front.name,
-      size: currentPhotoSet.front.size,
-      type: currentPhotoSet.front.type
-    });
-    
-    console.log('🔄 About to import uploadOriginalImageToR2...');
-    const { uploadOriginalImageToR2 } = await import('@/lib/backgroundRemoval');
-    console.log('✅ Successfully imported uploadOriginalImageToR2');
-    
-    console.log('🔄 About to call uploadOriginalImageToR2...');
-    const rawImageUpload = await uploadOriginalImageToR2(currentPhotoSet.front);
-    console.log('✅ uploadOriginalImageToR2 completed successfully');
-    
-    console.log('✅ Raw image upload result:', rawImageUpload);
-    
-    // Validate the upload result
-    if (!rawImageUpload || !rawImageUpload.url) {
-      console.error('❌ Upload result validation failed:', { rawImageUpload });
-      throw new Error('Failed to upload raw image to R2 - no URL returned');
-    }
-    
-    console.log('✅ Raw image uploaded to R2:', rawImageUpload.url);
-    console.log('🔄 Moving to Step 2: Creating photo record...');
-    
-    // Step 2: Create photo record with actual raw image URL
-    console.log('📝 Creating photo record with raw image URL...');
-    const initialPhotoRecord = {
-      user_id: user.id,
-      front_image_url: rawImageUpload.url, // Actual raw image URL from R2
-      left_image_url: null,
-      right_image_url: null, 
-      back_image_url: null,
-      generation_status: 'processing' as const,
-      job_id: null, // Will be updated after API call
-      model_url: null
-    };
-    
-    console.log('📝 Photo record to be created:', initialPhotoRecord);
-    
-    let createdPhoto;
-    try {
-      console.log('🔄 Attempting to create photo record...');
-      createdPhoto = await photoService.createPhoto(initialPhotoRecord);
-      console.log('✅ Photo record created with ID:', createdPhoto.id);
-    } catch (createError) {
-      console.error('❌ CRITICAL: Photo creation failed:', {
-        error: createError instanceof Error ? createError.message : 'Unknown error',
-        stack: createError instanceof Error ? createError.stack : undefined,
-        photoData: initialPhotoRecord
-      });
-      throw createError;
-    }
-    
-    // Step 3: Background Removal
-    console.log('🎨 Step 3: Removing background from front image...');
-    
-    // Update to removing_background stage
+    // Show initial progress state immediately
     setModels(prev =>
       prev.map(model =>
         model.id === selectedModel.id 
-          ? { ...model, processingStage: 'removing_background' } 
+          ? { 
+              ...model, 
+              status: 'processing',
+              processingStage: 'original_persisting',
+            } 
           : model
       )
     );
     setSelectedModel(prev => 
       prev?.id === selectedModel.id 
-        ? { ...prev, processingStage: 'removing_background' } 
+        ? { 
+            ...prev, 
+            status: 'processing',
+            processingStage: 'original_persisting',
+          } 
         : prev
     );
-      
-    // Import the background removal function dynamically
-    const { removeBackgroundFromImage } = await import('@/lib/backgroundRemoval');
     
-    // Remove background from the front image (this uploads processed image to R2)
-    const result = await removeBackgroundFromImage(currentPhotoSet.front, {
-      debug: process.env.NODE_ENV === 'development',
-      progress: (key: string, current: number, total: number) => {
-        console.log(`📊 Background removal progress: ${key} ${current}/${total}`);
-      }
-    });
-    
-    console.log('✅ Background removal completed!');
-    console.log('📄 Original image URL:', result.originalImageUrl);
-    console.log('🎨 Processed image URL:', result.processedImageUrl);
-    
-    // Create a File object from the processed image
-    const processedFile = new File([result.blob], result.fileName, { type: 'image/png' });
-    
-    // Step 4: Update photo record with background-removed image URL
-    console.log('🔄 Updating photo record with background-removed image URL...');
-    console.log('🔄 Photo ID:', createdPhoto.id);
-    console.log('🔄 Processed image URL:', result.processedImageUrl);
-    
-    // Verify the photo exists before updating
-    console.log('🔍 Verifying photo exists before update...');
-    try {
-      const existingPhoto = await photoService.getPhotoById(createdPhoto.id);
-      console.log('✅ Photo found for update:', {
-        id: existingPhoto.id,
-        current_front_nobgr_image_url: existingPhoto.front_nobgr_image_url
-      });
-    } catch (verifyError) {
-      console.error('❌ Photo verification failed:', verifyError);
-    }
-    
-    try {
-      console.log('🔄 Calling updatePhoto with data:', {
-        photoId: createdPhoto.id,
-        updateData: { front_nobgr_image_url: result.processedImageUrl }
-      });
-      
-      const updatedPhoto = await photoService.updatePhoto(createdPhoto.id, {
-        front_nobgr_image_url: result.processedImageUrl // Store background-removed image for debugging
-      });
-      
-      console.log('✅ Photo record updated with background-removed image URL:', updatedPhoto);
-      console.log('🔍 Updated photo front_nobgr_image_url:', updatedPhoto.front_nobgr_image_url);
-      
-      // Verify the update actually worked by fetching the record again
-      console.log('🔍 Verifying update by re-fetching photo...');
-      const verifiedPhoto = await photoService.getPhotoById(createdPhoto.id);
-      console.log('🔍 Verified photo after update:', {
-        id: verifiedPhoto.id,
-        front_nobgr_image_url: verifiedPhoto.front_nobgr_image_url
-      });
-      
-    } catch (updateError) {
-      console.error('❌ Failed to update photo record:', updateError);
-      console.error('❌ Update error details:', {
-        photoId: createdPhoto.id,
-        processedImageUrl: result.processedImageUrl,
-        error: updateError instanceof Error ? updateError.message : 'Unknown error',
-        stack: updateError instanceof Error ? updateError.stack : undefined
-      });
-      // Continue with the process even if the update fails
-      console.log('⚠️ Continuing with model generation despite update failure...');
-    }
-    
-    // Step 5: Prepare the model data for Hunyuan3D API
-    console.log('🚀 Step 5: Sending request to Hunyuan3D API...');
-      
-    // Import the Hunyuan3D client
+    // Remove local job ID generation - we'll get the real ID from the API response
+    let jobId: string | null = null;
 
+    try {
+      console.log('🎆 Starting 3D model generation process...');
       
-      // Create form data with the processed image
+      // Handle URL-based items (already implemented in Phase 3)
+      if (typeof currentPhotoSet.front !== 'object' || !(currentPhotoSet.front instanceof File)) {
+        const urlItem = currentPhotoSet.front as { url: string };
+        console.log('⏳ Processing URL-based model generation:', urlItem.url);
+        
+      // Create a minimal photo record for URL-based items
+      const photoRecord = {
+        user_id: user.id,
+        front_image_url: urlItem.url,
+        generation_status: 'processing' as const,
+        processing_stage: 'processing'
+      };
+        
+        const createdPhoto = await photoService.createPhoto(photoRecord);
+        
+        // Ensure we have a valid photo ID
+        if (!createdPhoto.id) {
+          throw new Error('Failed to get photo ID after creation');
+        }
+        
+        // Update UI state
+        const updatedModel: ModelData = { 
+          ...selectedModel, 
+          id: createdPhoto.id,
+          jobId,
+          status: 'processing',
+          processingStage: 'processing',
+          thumbnail: urlItem.url,
+          uploadedAt: new Date(),
+          isTemporary: false // Mark as persistent
+        };
+        
+        setModels(prev => prev.map(model => 
+          model.id === selectedModel.id ? updatedModel : model
+        ));
+        setSelectedModel(updatedModel);
+        
+        // Simulate processing for now
+        simulateProcessing(selectedModel.id, true);
+        return;
+      }
+
+      // Handle File uploads - retrieve from IndexedDB
+      const storage = new StorageService();
+      const frontFile = await storage.getDraft('front', true);
+      if (!frontFile) throw new Error('Front draft file not found');
+      
+      // Retrieve other views from IndexedDB if they exist
+      const otherViews = ['left', 'right', 'back'] as const;
+      const viewFiles: Record<string, File> = {};
+      
+      for (const view of otherViews) {
+        if (currentPhotoSet[view]) {
+          const file = await storage.getDraft(view, true);
+          if (file) viewFiles[view] = file;
+        }
+      }
+
+      // Create persistent database record with placeholder URL
+      const photoRecord = {
+        user_id: user.id,
+        front_image_url: 'placeholder', // Will be updated with actual URL
+        generation_status: 'processing' as const,
+        processing_stage: 'original_persisting',
+      };
+      
+      const createdPhoto = await photoService.createPhoto(photoRecord);
+      console.log('✅ Created persistent photo record:', createdPhoto.id);
+
+      // Update selected model with new persistent ID
+      const updatedModel: ModelData = {
+        ...selectedModel,
+        id: createdPhoto.id,
+        isTemporary: false,
+        expiresAt: undefined,
+        jobId,
+        status: 'processing',
+        processingStage: 'original_persisting',
+        uploadedAt: new Date()
+      };
+      
+      setModels(prev => prev.map(model => 
+        model.id === selectedModel.id ? updatedModel : model
+      ));
+      setSelectedModel(updatedModel);
+
+      // Upload original front image to R2
+      const { uploadOriginalImageToR2 } = await import('@/lib/backgroundRemoval');
+      const uploadResult = await uploadOriginalImageToR2(frontFile);
+      
+      console.log('✅ Raw image upload result:', uploadResult);
+      
+      // Validate the upload result
+      if (!uploadResult || !uploadResult.url) {
+        throw new Error('Failed to upload raw image to R2 - no URL returned');
+      }
+      
+      // Update DB with the persisted image URL
+      await photoService.updatePhoto(createdPhoto.id, {
+        processing_stage: 'background_removal',
+        front_image_url: uploadResult.url
+      });
+
+      // Run background removal using stored file
+      console.log('🎨 Starting background removal process...');
+      setSelectedModel(prev => 
+        prev?.id === createdPhoto.id 
+          ? { ...prev, processingStage: 'background_removal' } 
+          : prev
+      );
+
+      const { removeBackgroundFromImage } = await import('@/lib/backgroundRemoval');
+      const bgResult = await removeBackgroundFromImage(frontFile, {
+        debug: process.env.NODE_ENV === 'development',
+        progress: (key: string, current: number, total: number) => {
+          console.log(`📊 Background removal progress: ${key} ${current}/${total}`);
+        }
+      });
+
+      // Upload processed image to R2
+      const processedUpload = await uploadOriginalImageToR2(
+        new File([bgResult.blob], 'processed.png', { type: 'image/png' })
+      );
+
+      // Update DB with processed image URL
+      await photoService.updatePhoto(createdPhoto.id, {
+        processing_stage: 'processing',
+        front_nobgr_image_url: processedUpload.url
+      });
+
+      // Create form data for model generation
       const formData = new FormData();
-      formData.append('front', processedFile);
+      formData.append('front', new File([bgResult.blob], 'processed.png', { type: 'image/png' }));
       
       // Add other views if available
-      if (currentPhotoSet.back) formData.append('back', currentPhotoSet.back);
-      if (currentPhotoSet.left) formData.append('left', currentPhotoSet.left);
-      if (currentPhotoSet.right) formData.append('right', currentPhotoSet.right);
+      for (const [view, file] of Object.entries(viewFiles)) {
+        formData.append(view, file);
+      }
       
       // Add generation options
-      const options = {
-        enable_pbr: true,  // Enable PBR materials for better quality
-        should_remesh: true,  // Enable remeshing for better geometry
-        should_texture: true  // Enable texture generation
-      };
-      formData.append('options', JSON.stringify(options));
-      
-      // Update model status to show we're starting the API request
-      const updateModelStatus = (status: 'processing' | 'complete' | 'failed', stage?: ProcessingStage) => {
-        setModels(prev =>
-          prev.map(model =>
-            model.id === selectedModel.id 
-              ? { 
-                  ...model, 
-                  status,
-                  processingStage: stage,
-                  photoSet: { ...model.photoSet, front: processedFile },
-                  thumbnail: result.originalImageUrl,
-                } 
-              : model
-          )
-        );
-        setSelectedModel(prev => 
-          prev?.id === selectedModel.id 
-            ? { 
-                ...prev, 
-                status,
-                processingStage: stage,
-                photoSet: { ...prev.photoSet, front: processedFile },
-                thumbnail: result.originalImageUrl,
-              } 
-            : prev
-        );
-      };
-      
-      // Update status to show we're starting the model generation
-      updateModelStatus('processing', 'processing');
-      
-      // Update the existing photo record with background removal results
-      console.log('🔄 Updating photo record with background removal results...');
-      await photoService.updatePhoto(createdPhoto.id, {
-        front_image_url: result.originalImageUrl, // Store original image URL from R2
-        front_nobgr_image_url: result.processedImageUrl // Store background-removed image for debugging
-      });
-      console.log('✅ Photo record updated with original and background-removed image URLs');
-      
-      // Call the local API to create a new job (matches external API format)
-      const jobFormData = new FormData();
-      jobFormData.append('photoId', createdPhoto.id); // Internal use only
-      jobFormData.append('front', processedFile); // Matches external API
-      
-      // Add optional views if provided (matches external API field names)
-      if (currentPhotoSet.back) jobFormData.append('back', currentPhotoSet.back);
-      if (currentPhotoSet.left) jobFormData.append('left', currentPhotoSet.left);
-      if (currentPhotoSet.right) jobFormData.append('right', currentPhotoSet.right);
-      
-      // Add generation options
-      jobFormData.append('options', JSON.stringify({
+      formData.append('options', JSON.stringify({
         enable_pbr: true,
         should_remesh: true,
         should_texture: true
       }));
       
+      // Add photo ID (required by the API)
+      formData.append('photoId', createdPhoto.id);
+      
+      // We don't have job_creation_status column - removed this update
+
+      // Submit to generation API
       const response = await fetch('/api/generate', {
         method: 'POST',
-        body: jobFormData,
+        body: formData,
       });
       
       if (!response.ok) {
@@ -644,51 +640,47 @@ export default function Home() {
       }
       
       const jobResponse = await response.json();
-      
-      console.log('🎉 Model generation job created:', jobResponse);
-      
-      // Update photo record with the job ID (already done by API endpoint)
-      // No need to update again since API endpoint handles this
-      
-      // Update the model with the job ID and status
-      const updatedModel: ModelData = { 
-        ...selectedModel, 
-        id: jobId, // Ensure we have the correct ID
-        jobId: jobResponse.job_id, // External API uses job_id
-        status: 'processing',
-        processingStage: 'processing',
-        photoSet: { ...selectedModel.photoSet, front: processedFile },
-        thumbnail: result.originalImageUrl, // Use original image URL from R2
-        uploadedAt: new Date()
-      };
-      
-      // Update models state with the updated model
-      setModels(prev =>
-        prev.map(model =>
-          model.id === selectedModel.id ? updatedModel : model
-        )
+      jobId = jobResponse.job_id; // Get actual job ID from API response
+      console.log('🎉 Model generation job created:', jobId);
+
+      // Update photo record with job ID (without job_creation_status)
+      await photoService.updatePhoto(createdPhoto.id, {
+        job_id: jobId
+      });
+
+      // Update UI with job ID (using spread to avoid type issues)
+      setModels(prev => prev.map(model => 
+        model.id === createdPhoto.id 
+          ? { 
+              ...model, 
+              jobId: jobId || undefined,  // Convert null to undefined
+              processingStage: 'processing' 
+            } 
+          : model
+      ));
+      setSelectedModel(prev => 
+        prev?.id === createdPhoto.id 
+          ? { 
+              ...prev, 
+              jobId: jobId || undefined,  // Convert null to undefined
+              processingStage: 'processing' 
+            } 
+          : prev
       );
+
+      // Start checking job status with retry logic (only if jobId is valid)
+      if (jobId) {
+        checkJobStatusWithRetry(createdPhoto.id, jobId);
+      } else {
+        throw new Error('Job ID is missing after creating job');
+      }
       
-      // Update selected model
-      setSelectedModel(updatedModel);
-      
-      console.log('✅ Model generation started! The page will automatically update when complete.');
-      
-      // The job status will be checked on page load or when the user returns to the page
-      
-      // Continue with the rest of the processing stages
-      simulateProcessing(selectedModel.id, true); // Pass true to indicate background removal is done
-      
-      // Check status for this photo periodically
-      checkJobStatusForPhoto(createdPhoto.id, jobResponse.job_id);
-      
+      // Remove expired drafts during generation
+      const storageService = new StorageService();
+      await storageService.deleteExpiredDrafts();
+
     } catch (error) {
       console.error('❌ Error during model generation:', error);
-      console.error('❌ Error details:', {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined,
-        error: error
-      });
       
       // Update model status to show the error
       setModels((prev) =>
@@ -729,13 +721,20 @@ export default function Home() {
     }
   }
 
-  // Function to check job status for a specific photo
-  const checkJobStatusForPhoto = async (photoId: string, jobId: string) => {
+  // Function to check job status with retry logic
+  const checkJobStatusWithRetry = async (photoId: string, jobId: string, attempt = 0) => {
     try {
       const response = await fetch(`/api/status?job_id=${encodeURIComponent(jobId)}`);
+      
+      if (response.status === 404 && attempt < 5) {
+        // Job not ready yet - retry after delay
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return checkJobStatusWithRetry(photoId, jobId, attempt + 1);
+      }
+      
       if (!response.ok) {
         console.error('Failed to check job status:', response.statusText);
-        return;
+        throw new Error(`API returned ${response.status}`);
       }
       
       const statusData = await response.json();
@@ -744,7 +743,7 @@ export default function Home() {
       // Update photo record in database
       if (statusData.status === 'completed' && statusData.model_urls?.glb) {
         await photoService.updatePhoto(photoId, {
-          generation_status: 'completed', // Use the actual database enum value
+          generation_status: 'completed',
           model_url: statusData.model_urls.glb
         });
         
@@ -792,6 +791,32 @@ export default function Home() {
       }
     } catch (error) {
       console.error('Error checking job status:', error);
+      
+      if (attempt < 5) {
+        // Transient error - retry after delay
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return checkJobStatusWithRetry(photoId, jobId, attempt + 1);
+      } else {
+        // Permanent error - mark as failed
+        console.error(`Failed to check job status after ${attempt} attempts for job ${jobId}`);
+        setModels(prev => prev.map(model => 
+          model.jobId === jobId ? {
+            ...model,
+            status: 'failed',
+            processingStage: undefined,
+            error: 'Failed to check job status'
+          } : model
+        ));
+        
+        if (selectedModel?.jobId === jobId) {
+          setSelectedModel(prev => prev ? {
+            ...prev,
+            status: 'failed',
+            processingStage: undefined,
+            error: 'Failed to check job status'
+          } : prev);
+        }
+      }
     }
   };
   
@@ -802,7 +827,7 @@ export default function Home() {
       
       for (const photo of processingPhotos) {
         if (photo.job_id) {
-          await checkJobStatusForPhoto(photo.id, photo.job_id);
+          await checkJobStatusWithRetry(photo.id, photo.job_id);
         }
       }
     } catch (error) {
@@ -892,13 +917,44 @@ export default function Home() {
     }
   }, [user]);
   
+  // Phase 5: Expiration Handling - Cleanup interval
+  useEffect(() => {
+    const storage = new StorageService();
+    const interval = setInterval(async () => {
+      try {
+        console.log('⏳ Running expiration cleanup...');
+        
+        // 1. Frontend model expiration filtering
+        const now = new Date();
+        setModels(prev => prev.filter(model => 
+          !model.isTemporary || (model.expiresAt && model.expiresAt > now)
+        ));
+        
+        // Reset selected model if it's expired
+        setSelectedModel(prev => 
+          prev && prev.isTemporary && prev.expiresAt && prev.expiresAt <= now 
+            ? null 
+            : prev
+        );
+        
+        // 2. Backend purge of expired IndexedDB entries
+        await storage.deleteExpiredDrafts();
+        console.log('✅ Expired drafts purged from IndexedDB');
+      } catch (error) {
+        console.error('❌ Error during expiration cleanup:', error);
+      }
+    }, 30000); // Every 30 seconds
+    
+    return () => clearInterval(interval);
+  }, []);
+  
   // Check status when selected model changes (when user selects a photo)
   useEffect(() => {
     if (selectedModel?.jobId && selectedModel.status === 'processing') {
       // Find the photo ID for this model
       const photoId = models.find(m => m.id === selectedModel.id)?.id;
       if (photoId) {
-        checkJobStatusForPhoto(photoId, selectedModel.jobId);
+        checkJobStatusWithRetry(photoId, selectedModel.jobId);
       }
     }
   }, [selectedModel?.id]);
@@ -928,7 +984,7 @@ export default function Home() {
           {/* Upload Section (Y) - Fixed square size */}
           <div className="grid row-span-1 bg-white rounded-lg shadow-sm border border-gray-200 p-6 h-fit">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Upload Photos</h2>
-            <FileUpload onUpload={(file) => handleUpload(file, "front")} disabled={false} />
+            <FileUpload onUpload={(file: File) => handleUpload(file, "front")} disabled={false} />
           </div>
 
           {/* Image Gallery (X) - Takes remaining space */}
@@ -953,17 +1009,26 @@ export default function Home() {
               ) : (
                 // Show photo preview with integrated model viewer, generate button, and processing steps
                 <div className="flex-1 min-h-0">
-                  <PhotoPreview
-                    photoSet={currentPhotoSet}
-                    onUpload={handleUpload}
-                    onRemove={handleRemovePhoto}
+                    <PhotoPreview
+                    photoSet={{
+                      front: currentPhotoSet.front instanceof File ? currentPhotoSet.front : new File([], 'front.jpg', { type: 'image/jpeg' }),
+                      left: currentPhotoSet.left instanceof File ? currentPhotoSet.left : undefined,
+                      right: currentPhotoSet.right instanceof File ? currentPhotoSet.right : undefined,
+                      back: currentPhotoSet.back instanceof File ? currentPhotoSet.back : undefined
+                    }}
+                    processingStage={
+                      selectedModel.processingStage === 'failed' 
+                        ? undefined 
+                        : selectedModel.processingStage as "uploaded" | "processing" | "removing_background" | "generating" | "ready" | undefined
+                    }
+                    modelUrl={selectedModel.modelUrl}
+                    selectedModel={selectedModel}
+                    onUpload={(file) => handleUpload(file, "front")}
+                    onRemove={(position) => handleRemovePhoto(position)}
                     disabled={false}
                     onGenerate={handleGenerateModel}
                     canGenerate={canGenerate}
                     isGenerating={isGenerating}
-                    processingStage={selectedModel.processingStage}
-                    modelUrl={selectedModel.modelUrl}
-                    selectedModel={selectedModel}
                   />
                 </div>
               )

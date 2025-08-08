@@ -1,16 +1,15 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import type { PhotoSet } from "@/app/page"
+import type { PhotoSet, UploadItem } from "@/app/page"
 import { ModelViewer } from "@/components/model-viewer"
 
 interface PhotoPreviewProps {
   photoSet: PhotoSet
-  onUpload: (file: File, position: keyof PhotoSet) => void
+  onUpload: (file: File | UploadItem, position: keyof PhotoSet) => void
   onRemove: (position: keyof PhotoSet) => void
   disabled?: boolean
   onGenerate?: () => void
@@ -36,14 +35,61 @@ const stages = [
   { key: "ready", label: "Model ready", icon: "✅" },
 ]
 
-// Helper function to get image source from either File object or URL string
-const getImageSrc = (photo: File): string => {
-  // If the File object has a name that looks like a URL, use it directly
-  if (photo.name && (photo.name.startsWith('http') || photo.name.startsWith('/'))) {
-    return photo.name
+// Helper function to get image source from UploadItem
+const getImageSrc = (item: UploadItem): string => {
+  if (item instanceof File) {
+    // If the File object has a name that looks like a URL, use it directly
+    if (item.name && (item.name.startsWith('http') || item.name.startsWith('/'))) {
+      return item.name
+    }
+    // Otherwise, create object URL for actual File objects
+    return URL.createObjectURL(item)
+  } else {
+    return item.url
   }
-  // Otherwise, create object URL for actual File objects
-  return URL.createObjectURL(photo)
+}
+
+// Helper function to get expiration time for UploadItem
+const getExpirationTime = (item: UploadItem): Date | undefined => {
+  if (item instanceof File) {
+    return undefined
+  } else {
+    return item.expiresAt
+  }
+}
+
+// Component for showing expiration countdown
+const ExpirationBadge = ({ expiresAt }: { expiresAt: Date }) => {
+  const [timeLeft, setTimeLeft] = useState<string>('')
+
+  useEffect(() => {
+    const updateTimer = () => {
+      const now = new Date()
+      const diff = expiresAt.getTime() - now.getTime()
+      
+      if (diff <= 0) {
+        setTimeLeft('Expired')
+        return
+      }
+      
+      const hours = Math.floor(diff / (1000 * 60 * 60))
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000)
+      
+      setTimeLeft(`${hours}h ${minutes}m ${seconds}s`)
+    }
+
+    updateTimer()
+    const interval = setInterval(updateTimer, 1000)
+    return () => clearInterval(interval)
+  }, [expiresAt])
+
+  return (
+    <div className="absolute top-2 left-2 bg-yellow-500 text-white text-xs px-2 py-1 rounded-md flex items-center">
+      <span className="mr-1">⏳</span>
+      <span>{timeLeft}</span>
+    </div>
+  )
 }
 
 export function PhotoPreview({
@@ -59,6 +105,13 @@ export function PhotoPreview({
   selectedModel,
 }: PhotoPreviewProps) {
   const [dragOver, setDragOver] = useState<keyof PhotoSet | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [draftLoading, setDraftLoading] = useState<Record<keyof PhotoSet, boolean>>({
+    front: false,
+    left: false,
+    right: false,
+    back: false
+  })
 
   const handleFileSelect = (position: keyof PhotoSet) => (e: React.ChangeEvent<HTMLInputElement>) => {
     if (disabled) return
@@ -110,11 +163,16 @@ export function PhotoPreview({
         </div>
       )}
 
+      {/* Temporary model indicator (removed) */
+      }
       {/* Photo Grid - 1x4 horizontal layout with square aspect ratio */}
       <div className="grid grid-cols-4 gap-4 mb-4">
         {positions.map(({ key, label, required }) => {
           const photo = photoSet[key]
           const isDragOver = dragOver === key
+          const expiration = photo ? getExpirationTime(photo) : undefined
+          const isTemporary = expiration !== undefined
+          const isLoadingPosition = draftLoading[key]
 
           return (
             <div key={key} className="flex flex-col">
@@ -143,6 +201,7 @@ export function PhotoPreview({
                       : photo
                         ? "border-green-300 bg-green-50 hover:border-green-400 cursor-pointer"
                         : "border-gray-300 hover:border-gray-400 bg-gray-50 hover:bg-gray-100 cursor-pointer",
+                  isLoadingPosition ? "animate-pulse" : ""
                 )}
                 onDragOver={photoControlsDisabled ? undefined : handleDragOver(key)}
                 onDragLeave={photoControlsDisabled ? undefined : handleDragLeave}
@@ -165,6 +224,26 @@ export function PhotoPreview({
                       alt={`${label} view`}
                       className="w-full h-full object-cover rounded-lg"
                     />
+                    
+                    {/* Expiration badge for temporary items */}
+                    {isTemporary && expiration && (
+                      <ExpirationBadge expiresAt={expiration} />
+                    )}
+                    
+                    {/* Temporary item badge */}
+                    {isTemporary && (
+                      <div className="absolute top-2 right-2 bg-yellow-500 text-white text-xs px-2 py-1 rounded-md">
+                        Temporary
+                      </div>
+                    )}
+                    
+                    {/* Loading spinner */}
+                    {isLoadingPosition && (
+                      <div className="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center rounded-lg">
+                        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white"></div>
+                      </div>
+                    )}
+
                     {!photoControlsDisabled && (
                       <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all rounded-lg flex items-center justify-center">
                         <Button
@@ -183,29 +262,38 @@ export function PhotoPreview({
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full p-2">
-                    <div
-                      className={cn(
-                        "w-8 h-8 rounded-full flex items-center justify-center mb-2",
-                        photoControlsDisabled ? "bg-gray-200" : "bg-gray-200",
-                      )}
-                    >
-                      <svg
-                        className={cn("w-4 h-4", photoControlsDisabled ? "text-gray-400" : "text-gray-500")}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                    </div>
-                    <span
-                      className={cn("text-xs font-medium", photoControlsDisabled ? "text-gray-400" : "text-gray-600")}
-                    >
-                      {!photoControlsDisabled && isDragOver ? `Drop ${label.toLowerCase()} photo` : `Add ${label}`}
-                    </span>
-                    <span className={cn("text-xs mt-1", photoControlsDisabled ? "text-gray-400" : "text-gray-400")}>
-                      {!photoControlsDisabled ? "Click or drag" : "Locked"}
-                    </span>
+                    {isLoadingPosition ? (
+                      <div className="flex flex-col items-center">
+                        <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-500 mb-2"></div>
+                        <span className="text-xs text-gray-500">Loading...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div
+                          className={cn(
+                            "w-8 h-8 rounded-full flex items-center justify-center mb-2",
+                            photoControlsDisabled ? "bg-gray-200" : "bg-gray-200",
+                          )}
+                        >
+                          <svg
+                            className={cn("w-4 h-4", photoControlsDisabled ? "text-gray-400" : "text-gray-500")}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                        </div>
+                        <span
+                          className={cn("text-xs font-medium", photoControlsDisabled ? "text-gray-400" : "text-gray-600")}
+                        >
+                          {!photoControlsDisabled && isDragOver ? `Drop ${label.toLowerCase()} photo` : `Add ${label}`}
+                        </span>
+                        <span className={cn("text-xs mt-1", photoControlsDisabled ? "text-gray-400" : "text-gray-400")}>
+                          {!photoControlsDisabled ? "Click or drag" : "Locked"}
+                        </span>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

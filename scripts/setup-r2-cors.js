@@ -30,9 +30,9 @@ const corsConfiguration = {
   CORSRules: [
     {
       AllowedHeaders: ["*"],
-      AllowedMethods: ["GET", "HEAD"],
+      AllowedMethods: ["GET", "PUT", "HEAD"],
       AllowedOrigins: [
-        "https://v0-simple-3-d-model-generator.vercel.app",
+        "https://trywithar.vercel.app",
         "https://*.vercel.app",
         "http://localhost:3000",
         "http://localhost:3001"

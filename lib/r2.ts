@@ -1,35 +1,25 @@
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { getServerConfig, getClientConfig } from './config';
 
-// Validate environment variables
-function getEnvVar(name: string, isPublic = false): string {
-  const value = isPublic 
-    ? process.env[`NEXT_PUBLIC_${name}`] || process.env[name]
-    : process.env[name];
-  
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
+// R2 Client Setup - Lazy initialization
+let r2Client: S3Client | null = null;
+let publicPhotosUrlCache: string | null = null;
+let publicModelsUrlCache: string | null = null;
+
+function getR2Client(): S3Client {
+  if (!r2Client) {
+    r2Client = new S3Client({
+      region: "auto",
+      endpoint: `https://${getServerConfig('R2_ACCOUNT_ID')}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: getServerConfig('R2_ACCESS_KEY_ID'),
+        secretAccessKey: getServerConfig('R2_SECRET_ACCESS_KEY'),
+      },
+    });
   }
-  return value;
+  return r2Client;
 }
-
-// R2 Client Setup
-const accountId = getEnvVar('R2_ACCOUNT_ID');
-const accessKeyId = getEnvVar('R2_ACCESS_KEY_ID');
-const secretAccessKey = getEnvVar('R2_SECRET_ACCESS_KEY');
-
-// Get public URLs with fallbacks
-const publicPhotosUrl = getEnvVar('R2_PUBLIC_PHOTOS_URL', true);
-const publicModelsUrl = getEnvVar('R2_PUBLIC_MODELS_URL', true);
-
-const r2Client = new S3Client({
-  region: "auto",
-  endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId,
-    secretAccessKey,
-  },
-});
 
 type BucketType = 'photos' | 'models-glb';
 
@@ -44,8 +34,8 @@ export const r2Service = {
     contentType: string
   ): Promise<{ url: string; key: string }> {
     const bucketName = bucket === 'photos' 
-      ? getEnvVar('R2_PHOTOS_BUCKET')
-      : getEnvVar('R2_MODELS_BUCKET');
+      ? getServerConfig('R2_PHOTOS_BUCKET')
+      : getServerConfig('R2_MODELS_BUCKET');
 
     const command = new PutObjectCommand({
       Bucket: bucketName,
@@ -54,7 +44,7 @@ export const r2Service = {
       ContentType: contentType,
     });
 
-    await r2Client.send(command);
+    await getR2Client().send(command);
     
     // Generate a public URL for the uploaded file using the centralized method
     const publicUrl = this.getPublicUrl(bucket, key);
@@ -66,19 +56,36 @@ export const r2Service = {
   },
 
   /**
-   * Generate a pre-signed URL for a file
+   * Generate a pre-signed URL for downloading a file
    */
   async getSignedUrl(bucket: BucketType, key: string, expiresIn = 3600): Promise<string> {
     const bucketName = bucket === 'photos' 
-      ? getEnvVar('R2_PHOTOS_BUCKET')
-      : getEnvVar('R2_MODELS_BUCKET');
+      ? getServerConfig('R2_PHOTOS_BUCKET')
+      : getServerConfig('R2_MODELS_BUCKET');
 
     const command = new GetObjectCommand({
       Bucket: bucketName,
       Key: key,
     });
 
-    return getSignedUrl(r2Client, command, { expiresIn });
+    return getSignedUrl(getR2Client(), command, { expiresIn });
+  },
+
+  /**
+   * Generate a pre-signed URL for uploading a file
+   */
+  async generatePresignedUrl(key: string, contentType: string, bucket: BucketType = 'photos', expiresIn = 3600): Promise<string> {
+    const bucketName = bucket === 'photos' 
+      ? getServerConfig('R2_PHOTOS_BUCKET')
+      : getServerConfig('R2_MODELS_BUCKET');
+
+    const command = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+      ContentType: contentType,
+    });
+
+    return getSignedUrl(getR2Client(), command, { expiresIn });
   },
 
   /**
@@ -129,7 +136,10 @@ export const r2Service = {
    */
   getPublicUrl(bucket: BucketType, key: string): string {
     // Use the appropriate public URL based on the bucket type
-    let baseUrl = bucket === 'models-glb' ? publicModelsUrl : publicPhotosUrl;
+    // These are public URLs, so use client config
+    let baseUrl = bucket === 'models-glb' 
+      ? getClientConfig('NEXT_PUBLIC_R2_PUBLIC_MODELS_URL') 
+      : getClientConfig('NEXT_PUBLIC_R2_PUBLIC_PHOTOS_URL');
     
     // Ensure the base URL has the correct protocol and no trailing slash
     if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {

@@ -596,15 +596,43 @@ export default function Home() {
         }
       });
 
-      // Upload processed image to R2
-      const processedUpload = await uploadOriginalImageToR2(
-        new File([bgResult.blob], 'processed.png', { type: 'image/png' })
-      );
+      // Get presigned URL for direct upload
+      const presignedRes = await fetch('/api/generate-upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          fileName: 'processed.png',
+          contentType: 'image/png',
+          prefix: 'nobgr'
+        })
+      });
+
+      if (!presignedRes.ok) {
+        const errorData = await presignedRes.json();
+        throw new Error(`Failed to get upload URL: ${errorData.message}`);
+      }
+
+      const { presignedUrl, key } = await presignedRes.json();
+
+      // Direct upload to R2 using presigned URL
+      const uploadRes = await fetch(presignedUrl, {
+        method: 'PUT',
+        body: bgResult.blob,
+        headers: { 'Content-Type': 'image/png' }
+      });
+
+      if (!uploadRes.ok) {
+        throw new Error('Direct upload to R2 failed');
+      }
+
+      // Get public URL for the uploaded file
+      const r2 = await import('@/lib/r2');
+      const publicUrl = r2.r2Service.getPublicUrl('photos', key);
 
       // Update DB with processed image URL
       await photoService.updatePhoto(createdPhoto.id, {
         processing_stage: 'processing',
-        front_nobgr_image_url: processedUpload.url
+        front_nobgr_image_url: publicUrl
       });
 
       // Create form data for model generation

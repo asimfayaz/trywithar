@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from 'react'
+import React, { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,7 +10,8 @@ import { supabase } from '@/lib/supabase'
 // Add environment variable for base URL
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
 
-export default function ResetPasswordPage() {
+// Wrap the main content in Suspense to fix SSR error
+function ResetPasswordContent() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -220,5 +221,13 @@ export default function ResetPasswordPage() {
         </Button>
       </form>
     </div>
+  )
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<div className="max-w-md mx-auto p-6">Loading password reset...</div>}>
+      <ResetPasswordContent />
+    </Suspense>
   )
 }

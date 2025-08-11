@@ -70,6 +70,32 @@ export default function Home() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
+  // State to track if we should show the forgot password form
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+
+  // Check URL parameters for auth modal triggers
+  useEffect(() => {
+    // Check if we need to show the auth modal based on URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const showAuth = urlParams.get('showAuth');
+    const authMode = urlParams.get('authMode');
+    
+    if (showAuth === 'true') {
+      setShowAuthModal(true);
+      
+      // Set the auth modal to forgot password mode if specified
+      if (authMode === 'forgotPassword') {
+        setShowForgotPassword(true);
+      }
+    }
+    
+    // Clean up URL parameters after processing
+    if (showAuth || authMode) {
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, newUrl);
+    }
+  }, []);
+
   // Check for existing authentication session on app load
   useEffect(() => {
     let isInitialized = false
@@ -1216,7 +1242,13 @@ const statusMap: Record<string, {status: string, processingStage?: ProcessingSta
       </div>
 
       {/* Auth Modal */}
-      <AuthModal isOpen={showAuthModal} onClose={handleCloseAuthModal} onLogin={handleLogin} reason={authReason} />
+      <AuthModal 
+        isOpen={showAuthModal} 
+        onClose={handleCloseAuthModal} 
+        onLogin={handleLogin} 
+        reason={authReason}
+        initialForgotPassword={showForgotPassword}
+      />
     </div>
   )
 }

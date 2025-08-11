@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,17 +16,25 @@ interface AuthModalProps {
   onClose: () => void
   onLogin: (user: AuthUser) => void
   reason?: string | null
+  initialForgotPassword?: boolean
 }
 
-export function AuthModal({ isOpen, onClose, onLogin, reason }: AuthModalProps) {
+export function AuthModal({ isOpen, onClose, onLogin, reason, initialForgotPassword = false }: AuthModalProps) {
   const [isSignUp, setIsSignUp] = useState(false)
-  const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [showForgotPassword, setShowForgotPassword] = useState(initialForgotPassword)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [name, setName] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  // Check if reason indicates we should show the forgot password form
+  useEffect(() => {
+    if ((reason && reason.includes("expired") && reason.includes("reset")) || initialForgotPassword) {
+      setShowForgotPassword(true);
+    }
+  }, [reason, initialForgotPassword]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -34,14 +42,16 @@ export function AuthModal({ isOpen, onClose, onLogin, reason }: AuthModalProps) 
     setIsLoading(true)
 
     try {
-      if (showForgotPassword) {
+    if (showForgotPassword) {
         // Handle forgot password
-        await supabase.auth.resetPasswordForEmail(email)
+        await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: process.env.NEXT_PUBLIC_RESET_PASSWORD_REDIRECT
+        })
         alert("Password reset link sent to your email!")
         setShowForgotPassword(false)
         setEmail("")
         return
-      }
+    }
 
       if (isSignUp) {
         // Handle sign up

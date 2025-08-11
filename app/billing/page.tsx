@@ -6,8 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import Link from "next/link"
-import { userService, photoService, type AuthUser } from "@/lib/supabase"
-import { authService } from "@/lib/auth"
+import { 
+  Tooltip, 
+  TooltipContent, 
+  TooltipProvider, 
+  TooltipTrigger 
+} from "@/components/ui/tooltip"
+import { supabase, userService, photoService, type AuthUser } from "@/lib/supabase"
 
 export default function BillingPage() {
   const [isLoading, setIsLoading] = useState(false)
@@ -19,13 +24,16 @@ export default function BillingPage() {
   useEffect(() => {
     const loadUserData = async () => {
       try {
-        // Get current authenticated user
-        const userData = await authService.getCurrentUser()
-        if (!userData) {
-          console.error('No authenticated user found')
-          return
+        // Get current session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !session) {
+          console.error('No authenticated user found', sessionError);
+          return;
         }
-        setUser(userData)
+        
+        // Get user data using userService
+        const userData = await userService.getUserById(session.user.id);
+        setUser(userData);
         
         // Get user's photos to calculate total models generated
         const photos = await photoService.getPhotosByUserId(userData.id)
@@ -86,9 +94,7 @@ export default function BillingPage() {
     setIsLoading(false)
   }
 
-  const freeModelsRemaining = user ? Math.max(0, 2 - user.free_models_used) : 0
   const totalModelsGenerated = userPhotos.length
-  const completedModels = userPhotos.filter(photo => photo.generation_status === 'ready').length
 
   if (isLoadingData) {
     return (
@@ -135,22 +141,18 @@ export default function BillingPage() {
             <CardTitle>Current Balance</CardTitle>
             <CardDescription>Your account balance and usage summary</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="text-center">
-                <div className="text-3xl font-bold text-blue-600">${user.credits.toFixed(2)}</div>
-                <p className="text-sm text-gray-600">Available Credits</p>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-green-600">{freeModelsRemaining}</div>
-                <p className="text-sm text-gray-600">Free Models Remaining</p>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-gray-900">{totalModelsGenerated}</div>
-                <p className="text-sm text-gray-600">Total Models Generated</p>
-              </div>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-blue-600">{user.credits}</div>
+                  <p className="text-sm text-gray-600">Available Credits</p>
+                </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-gray-900">{totalModelsGenerated}</div>
+              <p className="text-sm text-gray-600">Total Models Generated</p>
             </div>
-          </CardContent>
+          </div>
+        </CardContent>
         </Card>
 
         {/* Purchase Credits */}
@@ -163,32 +165,39 @@ export default function BillingPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {[
                 { amount: 10, credits: 10, popular: false },
-                { amount: 25, credits: 25, popular: true },
-                { amount: 50, credits: 50, popular: false },
-                { amount: 100, credits: 100, popular: false },
+                { amount: 20, credits: 22, popular: true },
+                { amount: 30, credits: 35, popular: false },
+                { amount: 40, credits: 50, popular: false },
               ].map((option) => (
-                <div
-                  key={option.amount}
-                  className={`relative border rounded-lg p-4 text-center ${
-                    option.popular ? "border-blue-500 bg-blue-50" : "border-gray-200"
-                  }`}
-                >
-                  {option.popular && (
-                    <Badge className="absolute -top-2 left-1/2 transform -translate-x-1/2 bg-blue-500">
-                      Most Popular
-                    </Badge>
-                  )}
-                  <div className="text-2xl font-bold">${option.amount}</div>
-                  <div className="text-sm text-gray-600 mb-4">{option.credits} credits</div>
-                  <Button
-                    onClick={() => handlePurchase(option.amount)}
-                    disabled={isLoading}
-                    className="w-full"
-                    variant={option.popular ? "default" : "outline"}
-                  >
-                    {isLoading ? "Processing..." : "Purchase"}
-                  </Button>
-                </div>
+                <TooltipProvider key={option.amount}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div
+                        className={`relative border rounded-lg p-4 text-center ${
+                          option.popular ? "border-blue-500 bg-blue-50" : "border-gray-200"
+                        }`}
+                      >
+                        {option.popular && (
+                          <Badge className="absolute -top-2 left-1/2 transform -translate-x-1/2 bg-blue-500">
+                            Most Popular
+                          </Badge>
+                        )}
+                        <div className="text-2xl font-bold">${option.amount}</div>
+                        <div className="text-sm text-gray-600 mb-4">{option.credits} credits</div>
+                        <Button
+                          disabled={true}
+                          className="w-full"
+                          variant={option.popular ? "default" : "outline"}
+                        >
+                          Purchase
+                        </Button>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Coming soon</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               ))}
             </div>
             <div className="mt-6 p-4 bg-gray-50 rounded-lg">

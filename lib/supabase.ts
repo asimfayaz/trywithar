@@ -35,6 +35,7 @@ export type Job = {
   external_job_id: string; // job_id from Hunyuan3D API
   user_id: string;
   photo_id: string;
+  source_photo_id?: string | null; // Reference to original photo for generation jobs
   api_status: 'queued' | 'processing' | 'completed' | 'failed';
   api_stage?: string | null;
   progress: number;
@@ -58,14 +59,25 @@ export type Photo = {
   right_nobgr_image_url?: string | null; // Right image after background removal
   back_nobgr_image_url?: string | null; // Back image after background removal
   model_url?: string | null;
-  generation_status: 'pending' | 'processing' | 'completed' | 'failed'; // Actual database enum values
+  generation_status: 
+    'pending' |
+    'uploaded' |
+    'upload_failed' |
+    'bgr_removed' |
+    'bgr_removal_failed' |
+    'job_created' |
+    'job_creation_failed' |
+    'model_generated' |
+    'model_generation_failed' |
+    'model_saved' |
+    'model_saving_failed';
   job_id?: string | null;
+  source_photo_id?: string | null; // Reference to original photo for generation jobs
   created_at: string;
   updated_at: string;
 };
 
-// This is a placeholder for the actual environment variables
-// You'll need to create a .env.local file with these values
+// Use public environment variables for client-side compatibility
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
@@ -441,7 +453,7 @@ export const photoService = {
   // Update photo status (simplified for UI)
   async updatePhotoStatus(
     id: string, 
-    status: 'pending' | 'processing' | 'completed' | 'failed',
+    status: Photo['generation_status'],
     modelUrl?: string
   ): Promise<Photo> {
     const updates: Partial<Photo> = {

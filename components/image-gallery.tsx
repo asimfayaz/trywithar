@@ -54,7 +54,13 @@ export function ImageGallery({ models, onSelectModel, selectedModelId }: ImageGa
 
             {/* Status Badge */}
             <div className="absolute top-2 right-2">
-              {model.status === "uploaded" && (
+              {model.processingStage === "uploading" && (
+                <div className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
+                  <div className="w-2 h-2 bg-white rounded-full mr-1 animate-pulse" />
+                  Uploading...
+                </div>
+              )}
+              {model.processingStage === "uploaded" && model.status === "pending" && (
                 <div className="bg-gray-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
                   <div className="w-2 h-2 bg-white rounded-full mr-1" />
                   Uploaded

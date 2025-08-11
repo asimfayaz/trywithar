@@ -6,12 +6,16 @@
 function getEnvVar(name: string, isPublic = false): string {
   let value: string | undefined;
   
-  if (isPublic) {
-    // First try public version (NEXT_PUBLIC_ prefix)
-    value = process.env[`NEXT_PUBLIC_${name}`];
+  // Handle variables that already have NEXT_PUBLIC_ prefix
+  const isAlreadyPublic = name.startsWith('NEXT_PUBLIC_');
+  const baseName = isAlreadyPublic ? name.slice(12) : name;
+  
+  if (isPublic || isAlreadyPublic) {
+    // Try public version first
+    value = process.env[isAlreadyPublic ? name : `NEXT_PUBLIC_${name}`];
     
     // Fallback to non-prefixed version
-    if (!value) value = process.env[name];
+    if (!value) value = process.env[baseName];
   } else {
     // Private variables use exact name
     value = process.env[name];
@@ -19,14 +23,22 @@ function getEnvVar(name: string, isPublic = false): string {
   
   // Throw error if missing
   if (!value) {
-    const varNames = isPublic 
-      ? [`NEXT_PUBLIC_${name}`, name] 
+    const varNames = isPublic || isAlreadyPublic
+      ? [
+          isAlreadyPublic ? name : `NEXT_PUBLIC_${name}`,
+          baseName
+        ] 
       : [name];
-      
-    throw new Error(
-      `Missing required environment variable: ${varNames.join(' or ')}\n` +
-      'Please check your .env.local file and restart the server.'
-    );
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(`⚠️ Missing environment variable: ${varNames.join(' or ')}`);
+      return '';
+    } else {
+      throw new Error(
+        `Missing required environment variable: ${varNames.join(' or ')}\n` +
+        'Please check your .env.local file and restart the server.'
+      );
+    }
   }
   
   return value;

@@ -27,20 +27,20 @@ export function UserDashboard({ user, onLogin, onLogout }: UserDashboardProps) {
     )
   }
 
-  const freeModelsRemaining = Math.max(0, 2 - user.freeModelsUsed)
-  const hasCredits = user.credits > 0
+  // Use safe defaults for user properties
+  const userName = user.name || user.email?.split('@')[0] || "User";
+  const userAvatar = user.avatar_url || "/placeholder.svg";
+  const userEmail = user.email || "";
+  const userCredits = user.credits || 0;
+  const hasCredits = userCredits > 0;
 
   return (
     <div className="flex items-center space-x-4">
       {/* Quota Display */}
       <div className="hidden sm:flex items-center space-x-2 text-sm">
-        {freeModelsRemaining > 0 ? (
-          <Badge variant="secondary" className="bg-green-100 text-green-800">
-            {freeModelsRemaining} free models left
-          </Badge>
-        ) : hasCredits ? (
+        {hasCredits ? (
           <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-            ${user.credits.toFixed(2)} credits
+            {userCredits} credits
           </Badge>
         ) : (
           <Badge variant="destructive">No credits remaining</Badge>
@@ -52,27 +52,23 @@ export function UserDashboard({ user, onLogin, onLogout }: UserDashboardProps) {
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="relative h-10 w-10 rounded-full">
             <Avatar className="h-10 w-10">
-              <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
-              <AvatarFallback>{user.name.charAt(0).toUpperCase()}</AvatarFallback>
+              <AvatarImage src={userAvatar} alt={userName} />
+              <AvatarFallback>{userName.charAt(0).toUpperCase()}</AvatarFallback>
             </Avatar>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-56" align="end" forceMount>
           <div className="flex flex-col space-y-1 p-2">
-            <p className="text-sm font-medium leading-none">{user.name}</p>
-            <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+            <p className="text-sm font-medium leading-none">{userName}</p>
+            {userEmail && <p className="text-xs leading-none text-muted-foreground">{userEmail}</p>}
           </div>
           <DropdownMenuSeparator />
 
           {/* Mobile quota display */}
           <div className="sm:hidden p-2">
-            {freeModelsRemaining > 0 ? (
-              <Badge variant="secondary" className="bg-green-100 text-green-800 w-full justify-center">
-                {freeModelsRemaining} free models left
-              </Badge>
-            ) : hasCredits ? (
+            {hasCredits ? (
               <Badge variant="secondary" className="bg-blue-100 text-blue-800 w-full justify-center">
-                ${user.credits.toFixed(2)} credits
+                {userCredits} credits
               </Badge>
             ) : (
               <Badge variant="destructive" className="w-full justify-center">

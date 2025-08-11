@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
               // Update the photo record with the permanent R2 URL
               await photoService.updatePhoto(photo.id, {
                 model_url: uploadResult.url,
-                generation_status: 'completed'
+                generation_status: 'model_saved'
               });
               
               console.log(`💾 Updated photo record with permanent model URL`);
@@ -86,7 +86,42 @@ export async function GET(request: NextRequest) {
         }
       } catch (error) {
         console.error('Error downloading and storing model:', error);
+        
+        // Update photo status to model_saving_failed
+        try {
+          // Find the photo record associated with this job again
+          const failedPhotos = await photoService.getPhotosByJobId(jobId);
+          const failedPhoto = failedPhotos[0]; // Should only be one photo per job
+          
+          if (failedPhoto) {
+            await photoService.updatePhoto(failedPhoto.id, {
+              generation_status: 'model_saving_failed'
+            });
+            console.log('📝 Updated photo status to model_saving_failed');
+          }
+        } catch (statusError) {
+          console.error('❌ Failed to update photo status:', statusError);
+        }
+        
         // Continue with original response if download fails
+      }
+    }
+    
+    // If status is 'failed', update the photo record
+    if (status.status === 'failed') {
+      try {
+        // Find the photo record associated with this job
+        const photos = await photoService.getPhotosByJobId(jobId);
+        const photo = photos[0]; // Should only be one photo per job
+        
+        if (photo) {
+          await photoService.updatePhoto(photo.id, {
+            generation_status: 'model_generation_failed'
+          });
+          console.log('📝 Updated photo status to model_generation_failed due to failed job');
+        }
+      } catch (statusError) {
+        console.error('❌ Failed to update photo status for failed job:', statusError);
       }
     }
     

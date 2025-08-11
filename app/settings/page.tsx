@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import Link from "next/link"
 import { userService, type AuthUser } from "@/lib/supabase"
-import { authService } from "@/lib/auth"
+import { supabase } from "@/lib/supabase"
 
 export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(false)
@@ -35,16 +35,21 @@ export default function SettingsPage() {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoadingData, setIsLoadingData] = useState(true)
 
-  // Load user data on component mount
+  // Get session and load user data
   useEffect(() => {
-    const loadUserData = async () => {
+    const loadSessionAndUser = async () => {
+      setIsLoadingData(true)
+      
       try {
-        // Get current authenticated user
-        const userData = await authService.getCurrentUser()
-        if (!userData) {
-          console.error('No authenticated user found')
-          return
+        // Get current session
+        const { data: session, error: sessionError } = await supabase.auth.getSession()
+        
+        if (sessionError || !session.session) {
+          throw sessionError || new Error("No active session")
         }
+
+        // Get user data
+        const userData = await userService.getUserById(session.session.user.id)
         setUser(userData)
       } catch (error) {
         console.error('Failed to load user data:', error)
@@ -53,7 +58,7 @@ export default function SettingsPage() {
       }
     }
 
-    loadUserData()
+    loadSessionAndUser()
   }, [])
 
   const handlePasswordChange = async (e: React.FormEvent) => {
@@ -76,7 +81,13 @@ export default function SettingsPage() {
 
     setIsLoading(true)
     try {
-      await authService.updatePassword(currentPassword, newPassword)
+      // Update password using Supabase Auth
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      })
+
+      if (error) throw error
+      
       alert("Password updated successfully!")
       setCurrentPassword("")
       setNewPassword("")

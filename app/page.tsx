@@ -410,6 +410,13 @@ const statusMap: Record<string, {status: string, processingStage?: ProcessingSta
         // Replace temp model with final model
         setModels(prev => prev.map(m => m.id === tempId ? newModel : m));
         setSelectedModel(newModel);
+        
+        // Update both the current photoSet and the model's photoSet to use the persistent URL
+        const updatedPhotoSet = { front: { url: result.url } };
+        setCurrentPhotoSet(updatedPhotoSet);
+        setModels(prev => prev.map(model => 
+          model.id === newModel.id ? { ...model, photoSet: updatedPhotoSet } : model
+        ));
         console.log(`✅ Front photo uploaded and saved with id ${result.photoId}`);
       } else if (selectedModel) {
         // Set default expiration (24 hours from now) for temporary items
@@ -503,22 +510,21 @@ const statusMap: Record<string, {status: string, processingStage?: ProcessingSta
     try {
       const photo = await photoService.getPhotoById(model.id)
       if (photo) {
-        // Create a PhotoSet with actual image URLs instead of File objects
+        // Create a PhotoSet with URL objects for PhotoPreview component
         const photoSet: PhotoSet = {}
         
-        // Convert image URLs to File-like objects for PhotoPreview component
+        // Use proper URL objects instead of fake File objects
         if (photo.front_image_url) {
-          // Create a fake File object with the URL as the name for display
-          photoSet.front = new File([], photo.front_image_url)
+          photoSet.front = { url: photo.front_image_url }
         }
         if (photo.left_image_url) {
-          photoSet.left = new File([], photo.left_image_url)
+          photoSet.left = { url: photo.left_image_url }
         }
         if (photo.right_image_url) {
-          photoSet.right = new File([], photo.right_image_url)
+          photoSet.right = { url: photo.right_image_url }
         }
         if (photo.back_image_url) {
-          photoSet.back = new File([], photo.back_image_url)
+          photoSet.back = { url: photo.back_image_url }
         }
         
         setCurrentPhotoSet(photoSet)
@@ -1187,12 +1193,7 @@ const statusMap: Record<string, {status: string, processingStage?: ProcessingSta
                 // Show photo preview with integrated model viewer, generate button, and processing steps
                 <div className="flex-1 min-h-0">
                     <PhotoPreview
-                    photoSet={{
-                      front: currentPhotoSet.front instanceof File ? currentPhotoSet.front : new File([], 'front.jpg', { type: 'image/jpeg' }),
-                      left: currentPhotoSet.left instanceof File ? currentPhotoSet.left : undefined,
-                      right: currentPhotoSet.right instanceof File ? currentPhotoSet.right : undefined,
-                      back: currentPhotoSet.back instanceof File ? currentPhotoSet.back : undefined
-                    }}
+                    photoSet={currentPhotoSet}
                     processingStage={
                       selectedModel.processingStage === 'failed'
                         ? undefined

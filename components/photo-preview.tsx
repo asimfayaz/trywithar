@@ -63,15 +63,17 @@ const errorMessages: Record<string, string> = {
 // Helper function to get image source from UploadItem
 const getImageSrc = (item: UploadItem): string => {
   if (item instanceof File) {
-    // If the File object has a name that looks like a URL, use it directly
-    if (item.name && (item.name.startsWith('http') || item.name.startsWith('/'))) {
-      return item.name
-    }
-    // Otherwise, create object URL for actual File objects
-    return URL.createObjectURL(item)
-  } else {
-    return item.url
+    // Create object URL for actual File objects
+    return URL.createObjectURL(item);
+  } else if (item && typeof item === 'object' && item.url) {
+    // Return the URL directly for URL objects
+    return item.url;
+  } else if (typeof item === 'string') {
+    // Handle string URLs directly
+    return item;
   }
+  // Fallback
+  return '';
 }
 
 // Helper function to get expiration time for UploadItem

@@ -142,13 +142,17 @@ export const r2Service = {
       : getClientConfig('NEXT_PUBLIC_R2_PUBLIC_PHOTOS_URL');
     
     // Ensure the base URL has the correct protocol and no trailing slash
+    if (!baseUrl) {
+      console.error(`Missing public URL for bucket type: ${bucket}`);
+      return '';
+    }
+    
     if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
       baseUrl = `https://${baseUrl}`;
     }
     baseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
     
-    // For photos, preserve the folder structure (e.g., 'original/' or 'nobgr/')
-    // For models, use the key as-is since it's already at the root
+    // Remove any leading slashes from the key
     const cleanKey = key.startsWith('/') ? key.substring(1) : key;
     
     // Construct the full URL

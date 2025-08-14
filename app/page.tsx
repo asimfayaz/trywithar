@@ -884,9 +884,9 @@ const updatedModel: ModelData = {
             <FileUpload onUpload={(file: File) => handleUpload(file, "front")} disabled={false} />
           </div>
 
-          {/* Image Gallery */}
+          {/* Model Gallery */}
           <div className="grid row-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex-1 min-h-0">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Photos</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Your 3D Models</h2>
             <ImageGallery models={models} onSelectModel={handleSelectModel} selectedModelId={selectedModel?.id} />
           </div>
         </div>

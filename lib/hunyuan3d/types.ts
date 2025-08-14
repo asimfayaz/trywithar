@@ -61,6 +61,7 @@ export interface JobStatusResponse {
   model_urls?: {
     glb: string;        // URL to the generated GLB model
   };
+  detail?: string;      // Optional error message
 }
 
 // Error response

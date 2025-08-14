@@ -12,7 +12,7 @@ import {
   TooltipProvider, 
   TooltipTrigger 
 } from "@/components/ui/tooltip"
-import { supabase, userService, photoService, type AuthUser } from "@/lib/supabase"
+import { supabase, userService, modelService, type AuthUser } from "@/lib/supabase"
 
 export default function BillingPage() {
   const [isLoading, setIsLoading] = useState(false)
@@ -35,9 +35,9 @@ export default function BillingPage() {
         const userData = await userService.getUserById(session.user.id);
         setUser(userData);
         
-        // Get user's photos to calculate total models generated
-        const photos = await photoService.getPhotosByUserId(userData.id)
-        setUserPhotos(photos)
+        // Get user's models to calculate total models generated
+        const models = await modelService.getModelsByUserId(userData.id)
+        setUserPhotos(models)
       } catch (error) {
         console.error('Failed to load user data:', error)
       } finally {

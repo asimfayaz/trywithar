@@ -175,9 +175,9 @@ export async function POST(request: NextRequest) {
     });
     console.log('✅ Job created successfully:', { id: job.id, external_job_id: job.external_job_id });
     
-    // Update model record with job ID and set status to generating
+    // Update model record with INTERNAL job ID and set status to generating
     await modelService.updateModel(modelId, {
-      job_id: response.job_id,
+      job_id: job.id,  // Store the internal job ID
       model_status: 'generating_3d_model'
     });
     

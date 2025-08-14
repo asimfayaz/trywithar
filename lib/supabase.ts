@@ -45,34 +45,23 @@ export type Job = {
   updated_at: string;
 };
 
-export type Photo = {
+export type Model = {
   id: string;
   user_id: string;
-  front_image_url: string; // Original front image
-  left_image_url?: string | null; // Original left image
-  right_image_url?: string | null; // Original right image
-  back_image_url?: string | null; // Original back image
-  front_nobgr_image_url?: string | null; // Front image after background removal
-  left_nobgr_image_url?: string | null; // Left image after background removal
-  right_nobgr_image_url?: string | null; // Right image after background removal
-  back_nobgr_image_url?: string | null; // Back image after background removal
-  model_url?: string | null;
-  generation_status: 
-    'pending' |
-    'uploaded' |
-    'upload_failed' |
-    'bgr_removed' |
-    'bgr_removal_failed' |
-    'job_created' |
-    'job_creation_failed' |
-    'model_generated' |
-    'model_generation_failed' |
-    'model_saved' |
-    'model_saving_failed';
-  job_id?: string | null;
-  source_photo_id?: string | null; // Reference to original photo for generation jobs
+  model_status: string;
+  front_image_url: string | null;
+  left_image_url: string | null;
+  right_image_url: string | null;
+  back_image_url: string | null;
+  front_nobgr_image_url: string | null;
+  left_nobgr_image_url: string | null;
+  right_nobgr_image_url: string | null;
+  back_nobgr_image_url: string | null;
+  model_url: string | null;
+  job_id: string | null;
   created_at: string;
   updated_at: string;
+  expires_at: string | null;
 };
 
 // Use public environment variables for client-side compatibility
@@ -269,20 +258,20 @@ export const jobService = {
     return data as Job;
   },
 
-  // Get job by photo ID
-  async getJobByPhotoId(photoId: string) {
+  // Get job by ID
+  async getJobById(id: string) {
     const { data, error } = await supabase
       .from('jobs')
       .select('*')
-      .eq('photo_id', photoId)
+      .eq('id', id)
       .single();
     
     if (error) throw error;
     return data as Job;
   },
 
-  // Update job status and progress
-  async updateJobStatus(
+  // Update job record
+  async updateJob(
     id: string, 
     updates: {
       api_status?: Job['api_status'];
@@ -318,168 +307,74 @@ export const jobService = {
   }
 };
 
-// Photo service
-export const photoService = {
-  // Create a new photo entry
-  async createPhoto(photoData: Omit<Photo, 'id' | 'created_at' | 'updated_at'> & {
-    processing_stage?: string;
-    expires_at?: string;
-  }) {
-    console.log('🔍 Creating photo with data:', JSON.stringify(photoData, null, 2));
-    
-    console.log('📡 About to make Supabase insert call...');
+// Model service
+export const modelService = {
+  // Get model by ID
+  async getModel(id: string) {
     const { data, error } = await supabase
-      .from('photos')
-      .insert(photoData)
-      .select()
-      .single();
-    
-    console.log('📡 Supabase insert call completed:', { hasData: !!data, hasError: !!error });
-    
-    if (error) {
-      console.error('❌ Photo creation failed:', {
-        error: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code,
-        photoData: JSON.stringify(photoData, null, 2)
-      });
-      throw error;
-    }
-    
-    console.log('✅ Photo created successfully:', data);
-    return data as Photo;
-  },
-
-  // Get a photo by ID
-  async getPhotoById(id: string) {
-    const { data, error } = await supabase
-      .from('photos')
+      .from('models')
       .select('*')
       .eq('id', id)
       .single();
     
     if (error) throw error;
-    return data as Photo;
+    return data as Model;
   },
 
-  // Get photos by user ID
-  async getPhotosByUserId(userId: string) {
+  // Get models by user ID
+  async getModelsByUserId(userId: string) {
     const { data, error } = await supabase
-      .from('photos')
+      .from('models')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
     
     if (error) throw error;
-    return data as Photo[];
+    return data as Model[];
   },
 
-  // Get photos by generation status
-  async getPhotosByStatus(status: Photo['generation_status']) {
+  // Get models by job ID
+  async getModelsByJobId(jobId: string) {
     const { data, error } = await supabase
-      .from('photos')
-      .select('*')
-      .eq('generation_status', status)
-      .order('created_at', { ascending: false });
-    
-    if (error) throw error;
-    return data as Photo[];
-  },
-
-  // Get photos by processing stage
-  async getPhotosByStage(stages: string[]) {
-    const { data, error } = await supabase
-      .from('photos')
-      .select('*')
-      .in('processing_stage', stages)
-      .order('created_at', { ascending: false });
-    
-    if (error) throw error;
-    return data as Photo[];
-  },
-
-  // Get photos by job ID
-  async getPhotosByJobId(jobId: string) {
-    const { data, error } = await supabase
-      .from('photos')
+      .from('models')
       .select('*')
       .eq('job_id', jobId);
     
     if (error) throw error;
-    return data as Photo[];
+    return data as Model[];
   },
 
-  // Update a photo
-  async updatePhoto(id: string, updates: Partial<Omit<Photo, 'id' | 'created_at' | 'updated_at'>> & {
-    processing_stage?: string;
-    expires_at?: string;
-  }) {
-    console.log('📝 Updating photo with ID:', id, 'Updates:', updates);
+  // Update a model
+  async updateModel(id: string, updates: Partial<Omit<Model, 'id' | 'created_at' | 'updated_at'>>) {
+    console.log('📝 Updating model with ID:', id, 'Updates:', updates);
     
-    // First check if the photo exists
-    const { data: existingPhoto, error: checkError } = await supabase
-      .from('photos')
+    // First check if the model exists
+    const { data: existingModel, error: checkError } = await supabase
+      .from('models')
       .select('id, user_id')
       .eq('id', id)
       .single();
     
     if (checkError) {
-      console.error('❌ Photo not found for update:', checkError);
-      throw new Error(`Photo with ID ${id} not found: ${checkError.message}`);
+      console.error('❌ Model not found for update:', checkError);
+      throw new Error(`Model with ID ${id} not found: ${checkError.message}`);
     }
     
-    console.log('✅ Photo exists, proceeding with update:', existingPhoto);
+    console.log('✅ Model exists, proceeding with update:', existingModel);
     
     const { data, error } = await supabase
-      .from('photos')
+      .from('models')
       .update(updates)
       .eq('id', id)
       .select()
       .single();
     
     if (error) {
-      console.error('❌ Photo update failed:', error);
-      throw new Error(`Failed to update photo: ${error.message}`);
+      console.error('❌ Model update failed:', error);
+      throw new Error(`Failed to update model: ${error.message}`);
     }
     
-    console.log('✅ Photo updated successfully:', data);
-    return data as Photo;
-  },
-
-  // Update generation status
-  async updateGenerationStatus(id: string, status: Photo['generation_status'], jobId?: string) {
-    const updates: Partial<Photo> = { generation_status: status };
-    if (jobId) updates.job_id = jobId;
-    
-    return this.updatePhoto(id, updates);
-  },
-
-  // Update photo status (simplified for UI)
-  async updatePhotoStatus(
-    id: string, 
-    status: Photo['generation_status'],
-    modelUrl?: string
-  ): Promise<Photo> {
-    const updates: Partial<Photo> = {
-      generation_status: status
-    };
-
-    if (modelUrl) {
-      updates.model_url = modelUrl;
-    }
-
-    return this.updatePhoto(id, updates);
-  },
-
-  // Delete a photo
-  async deletePhoto(id: string) {
-    const { error } = await supabase
-      .from('photos')
-      .delete()
-      .eq('id', id);
-    
-    if (error) throw error;
-    return true;
+    console.log('✅ Model updated successfully:', data);
+    return data as Model;
   }
 };

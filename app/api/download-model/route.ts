@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { r2Service } from '@/lib/r2';
-import { photoService } from '@/lib/supabase';
+import { modelService } from '@/lib/supabase';
 
 /**
  * Download Model endpoint
@@ -11,16 +11,16 @@ import { photoService } from '@/lib/supabase';
  */
 export async function POST(request: NextRequest) {
   try {
-    const { photoId, modelUrl } = await request.json();
+    const { modelId, modelUrl } = await request.json();
     
-    if (!photoId || !modelUrl) {
+    if (!modelId || !modelUrl) {
       return NextResponse.json(
-        { error: 'Missing required fields', message: 'photoId and modelUrl are required' },
+        { error: 'Missing required fields', message: 'modelId and modelUrl are required' },
         { status: 400 }
       );
     }
 
-    console.log(`📥 Downloading model for photo ${photoId} from ${modelUrl}`);
+    console.log(`📥 Downloading model ${modelId} from ${modelUrl}`);
 
     // Download the model file from Hunyuan3D
     const modelResponse = await fetch(modelUrl);
@@ -37,20 +37,20 @@ export async function POST(request: NextRequest) {
     console.log(`📦 Downloaded model file, size: ${modelBuffer.length} bytes`);
 
     // Generate a filename for the model
-    const filename = `model-${photoId}.glb`;
+    const filename = `model-${modelId}.glb`;
 
     // Upload to R2 storage
     console.log(`☁️ Uploading model to R2 storage...`);
     const uploadResult = await r2Service.uploadModel(modelBuffer, filename);
     console.log(`✅ Model uploaded to R2: ${uploadResult.url}`);
 
-    // Update the photo record with the permanent R2 URL
-    await photoService.updatePhoto(photoId, {
+    // Update the model record with the permanent R2 URL
+    await modelService.updateModel(modelId, {
       model_url: uploadResult.url,
-      generation_status: 'completed'
+      model_status: 'completed'
     });
 
-    console.log(`💾 Updated photo record with permanent model URL`);
+    console.log(`💾 Updated model record with permanent model URL`);
 
     return NextResponse.json({
       success: true,

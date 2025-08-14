@@ -47,22 +47,33 @@ let serverRuntimeConfig: AppRuntimeConfig['serverRuntimeConfig'] = {
   HUNYUAN3D_API_URL: '',
 };
 
-// Always attempt to get runtime config from Next.js
-try {
-  const config = getConfig() as AppRuntimeConfig;
-  
-  // Merge with defaults
+// Conditionally load runtime config from Next.js
+if (typeof window === 'undefined') {
+  try {
+    const config = getConfig() as AppRuntimeConfig;
+    
+    // Merge with defaults
+    publicRuntimeConfig = {
+      ...publicRuntimeConfig,
+      ...(config.publicRuntimeConfig || {})
+    };
+    
+    serverRuntimeConfig = {
+      ...serverRuntimeConfig,
+      ...(config.serverRuntimeConfig || {})
+    };
+  } catch (error) {
+    console.error('Failed to load runtime configuration:', error);
+  }
+} else {
+  // Client-side: use public environment variables directly
   publicRuntimeConfig = {
-    ...publicRuntimeConfig,
-    ...(config.publicRuntimeConfig || {})
+    NEXT_PUBLIC_R2_PUBLIC_PHOTOS_URL: process.env.NEXT_PUBLIC_R2_PUBLIC_PHOTOS_URL || '',
+    NEXT_PUBLIC_R2_PUBLIC_MODELS_URL: process.env.NEXT_PUBLIC_R2_PUBLIC_MODELS_URL || '',
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+    NEXT_PUBLIC_HUNYUAN3D_API_URL: process.env.NEXT_PUBLIC_HUNYUAN3D_API_URL || '',
   };
-  
-  serverRuntimeConfig = {
-    ...serverRuntimeConfig,
-    ...(config.serverRuntimeConfig || {})
-  };
-} catch (error) {
-  console.error('Failed to load runtime configuration:', error);
 }
 
 // Validate server configuration on startup

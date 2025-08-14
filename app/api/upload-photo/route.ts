@@ -1,6 +1,6 @@
 import { r2Service } from '@/lib/r2';
 import { NextResponse } from 'next/server';
-import { supabase, photoService } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 // Helper function for CORS headers
 function getCorsHeaders() {
@@ -11,12 +11,7 @@ function getCorsHeaders() {
 }
 
 export async function POST(request: Request) {
-  let user = null;
-  
   try {
-    // Use existing Supabase client
-    // supabase is already imported and ready to use
-    
     // Get JWT from Authorization header
     const authHeader = request.headers.get('Authorization');
     const token = authHeader?.split(' ')[1];
@@ -37,45 +32,26 @@ export async function POST(request: Request) {
         { status: 401, headers: getCorsHeaders() }
       );
     }
-    user = userData.user;
 
     const formData = await request.formData();
     const file = formData.get('file') as File;
-    const originalName = formData.get('originalName') as string;
 
-    if (!file || !originalName) {
+    if (!file) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing required file' },
         { status: 400, headers: getCorsHeaders() }
       );
     }
 
+    // Upload file to R2 storage
     const buffer = Buffer.from(await file.arrayBuffer());
-    const result = await r2Service.uploadPhoto(buffer, originalName);
-
-    // Create photo record with initial 'uploaded' status
-    const photo = await photoService.createPhoto({
-      user_id: user.id,
-      front_image_url: result.url,
-      generation_status: 'uploaded'
-    });
+    const result = await r2Service.uploadPhoto(buffer, file.name);
 
     return NextResponse.json({
-      ...result,
-      photoId: photo.id
+      url: result.url
     }, { headers: getCorsHeaders() });
   } catch (error) {
     console.error('Error uploading photo:', error);
-    
-    // Create failed record if we have user context
-    if (user) {
-      await photoService.createPhoto({
-        user_id: user.id,
-        front_image_url: '', // Empty since upload failed
-        generation_status: 'upload_failed' as any // Temporary workaround
-      });
-    }
-
     return NextResponse.json(
       { error: 'Failed to upload photo' },
       { status: 500, headers: getCorsHeaders() }

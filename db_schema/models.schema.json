@@ -1,0 +1,100 @@
+{
+  "table": "public.models",
+  "columns": [
+    {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "extensions.uuid_generate_v4()",
+      "constraints": ["primary key"]
+    },
+    {
+      "name": "user_id",
+      "type": "uuid",
+      "nullable": true,
+      "references": {
+        "table": "auth.users",
+        "column": "id",
+        "on_delete": "CASCADE"
+      }
+    },
+    {
+      "name": "model_status",
+      "type": "public.model_status",
+      "nullable": false,
+      "default": "'draft'::model_status"
+    },
+    { "name": "front_image_url", "type": "text", "nullable": true },
+    { "name": "left_image_url", "type": "text", "nullable": true },
+    { "name": "right_image_url", "type": "text", "nullable": true },
+    { "name": "back_image_url", "type": "text", "nullable": true },
+    { "name": "front_nobgr_image_url", "type": "text", "nullable": true },
+    { "name": "left_nobgr_image_url", "type": "text", "nullable": true },
+    { "name": "right_nobgr_image_url", "type": "text", "nullable": true },
+    { "name": "back_nobgr_image_url", "type": "text", "nullable": true },
+    { "name": "model_url", "type": "text", "nullable": true },
+    { "name": "job_id", "type": "uuid", "nullable": true },
+    {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": "now()"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": "now()"
+    },
+    {
+      "name": "expires_at",
+      "type": "timestamp with time zone",
+      "nullable": true,
+      "default": "now() + interval '01:00:00'"
+    }
+  ],
+  "constraints": [
+    { "type": "primary key", "columns": ["id"] },
+    { "type": "unique", "columns": ["job_id"], "name": "models_job_id_key" },
+    { "type": "unique", "columns": ["job_id"], "name": "models_job_id_key1" },
+    { "type": "unique", "columns": ["job_id"], "name": "models_job_id_key2" },
+    {
+      "type": "foreign key",
+      "columns": ["user_id"],
+      "references": {
+        "table": "auth.users",
+        "columns": ["id"],
+        "on_delete": "CASCADE"
+      }
+    }
+  ],
+  "indexes": [
+    {
+      "name": "idx_models_user_id",
+      "columns": ["user_id"],
+      "unique": false,
+      "method": "btree"
+    },
+    {
+      "name": "idx_models_model_status",
+      "columns": ["model_status"],
+      "unique": false,
+      "method": "btree"
+    },
+    {
+      "name": "idx_models_job_id",
+      "columns": ["job_id"],
+      "unique": false,
+      "method": "btree"
+    }
+  ],
+  "triggers": [
+    {
+      "name": "update_models_modtime",
+      "timing": "BEFORE",
+      "event": "UPDATE",
+      "level": "ROW",
+      "function": "update_modified_column()"
+    }
+  ]
+}

@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { photoService, jobService, supabase, type Photo } from '@/lib/supabase';
+import { jobService } from '@/lib/supabase';
+import { ModelService } from '@/lib/supabase/model.service';
+import { supabaseServer } from '@/lib/supabase-server';
+
+const modelService = new ModelService();
 
 /**
  * 3D Model Generation endpoint
@@ -10,17 +14,17 @@ import { photoService, jobService, supabase, type Photo } from '@/lib/supabase';
 export async function POST(request: NextRequest) {
   // Declare variables that need to be accessed in try and catch blocks
   let originalCredits: number | undefined;
-  let photo: Photo | null = null;
+  let model: any = null;
   
   try {
     // Parse form data
     const formData = await request.formData();
     
-    // Get photo ID from form data (internal use only)
-    const photoId = formData.get('photoId') as string;
-    if (!photoId) {
+    // Get model ID from form data (internal use only)
+    const modelId = formData.get('modelId') as string;
+    if (!modelId) {
       return NextResponse.json(
-        { detail: 'Photo ID is required' },
+        { detail: 'Model ID is required' },
         { status: 400 }
       );
     }
@@ -48,23 +52,59 @@ export async function POST(request: NextRequest) {
     if (right) externalFormData.append('right', right);
     if (options) externalFormData.append('options', options);
     
-    // Get photo record to get user_id
-    console.log('🔍 Looking up photo with ID:', photoId);
-    photo = await photoService.getPhotoById(photoId);
-    console.log('✅ Found photo:', { id: photo.id, user_id: photo.user_id });
+    // Get model record to get user_id
+    console.log('🔍 Looking up model with ID:', modelId);
+    model = await modelService.getModel(modelId);
+    console.log('✅ Found model:', { id: model.id, user_id: model.user_id });
     
     // Check user credits before proceeding
-    console.log('🔍 Checking user credits for user:', photo.user_id);
-    const { data: userBilling, error: billingError } = await supabase
+    console.log('🔍 Checking user credits for user:', model.user_id);
+    let userBilling = null;
+    let billingError: any = null;
+    
+    try {
+      // First try to fetch existing billing record
+    const { data, error } = await supabaseServer
       .from('user_billing')
       .select('credits, total_models_generated')
-      .eq('id', photo.user_id)
+      .eq('id', model.user_id)
       .single();
+      
+      if (error) throw error;
+      userBilling = data;
+    } catch (error: any) {
+      if (error?.code === 'PGRST116') { // No rows found error code
+        console.log('ℹ️ No billing record found, creating one with default credits');
+        
+        // Create new billing record with default credits
+    const { data: newBilling, error: createError } = await supabaseServer
+      .from('user_billing')
+      .insert([{ 
+        id: model.user_id, 
+        credits: 2, // Default credits
+        total_models_generated: 0 
+      }])
+      .select('credits, total_models_generated')
+      .single();
+          
+        if (createError) {
+          console.error('❌ Failed to create user billing record:', createError.message);
+          return NextResponse.json(
+            { detail: 'Failed to create user billing record' },
+            { status: 500 }
+          );
+        }
+        userBilling = newBilling;
+      } else {
+        billingError = error;
+      }
+    }
     
     if (billingError || !userBilling) {
-      console.error('❌ Failed to fetch user credits:', billingError?.message || 'No data returned');
+      const errorMessage = billingError?.message || 'No data returned';
+      console.error('❌ Failed to fetch user credits:', errorMessage);
       return NextResponse.json(
-        { detail: 'Failed to fetch user credits' },
+        { detail: `Failed to fetch user credits: ${errorMessage}` },
         { status: 500 }
       );
     }
@@ -78,11 +118,11 @@ export async function POST(request: NextRequest) {
     }
     
     // Deduct 1 credit for this generation
-    console.log('💳 Deducting 1 credit from user:', photo.user_id);
-    const { error: deductError } = await supabase
+    console.log('💳 Deducting 1 credit from user:', model.user_id);
+    const { error: deductError } = await supabaseServer
       .from('user_billing')
       .update({ credits: userBilling.credits - 1 })
-      .eq('id', photo.user_id);
+      .eq('id', model.user_id);
     
     if (deductError) {
       console.error('❌ Failed to deduct credits:', deductError.message);
@@ -118,47 +158,35 @@ export async function POST(request: NextRequest) {
     
     const response = await apiResponse.json();
     
-    // Get source photo ID if this is a generation job
-    const sourcePhotoId = photo.source_photo_id || null;
-
     // Create job record to track the generation process
     console.log('📝 Creating job record with data:', {
       external_job_id: response.job_id,
-      user_id: photo.user_id,
-      photo_id: photoId,
-      source_photo_id: sourcePhotoId,
+      user_id: model.user_id,
       api_status: response.status,
       api_stage: 'queued',
       progress: 0
     });
     const job = await jobService.createJob({
       external_job_id: response.job_id,
-      user_id: photo.user_id,
-      photo_id: photoId,
-      source_photo_id: sourcePhotoId,
+      user_id: model.user_id,
       api_status: response.status,
       api_stage: 'queued',
       progress: 0
     });
     console.log('✅ Job created successfully:', { id: job.id, external_job_id: job.external_job_id });
     
-    // Update photo record with job ID and set status to job_created
-    await photoService.updatePhoto(photoId, {
+    // Update model record with job ID and set status to generating
+    await modelService.updateModel(modelId, {
       job_id: response.job_id,
-      generation_status: 'job_created'
+      model_status: 'generating_3d_model'
     });
     
     // On success, increment total models generated
-    console.log('📈 Incrementing total models generated for user:', photo.user_id);
-    await supabase
+    console.log('📈 Incrementing total models generated for user:', model.user_id);
+    await supabaseServer
       .from('user_billing')
       .update({ total_models_generated: userBilling.total_models_generated + 1 })
-      .eq('id', photo.user_id);
-
-    // Update photo status to model_generated
-    await photoService.updatePhoto(photoId, {
-      generation_status: 'model_generated'
-    });
+      .eq('id', model.user_id);
     
     return NextResponse.json({
       job_id: response.job_id,
@@ -167,40 +195,53 @@ export async function POST(request: NextRequest) {
     
   } catch (error) {
     // Refund credit if deduction occurred and generation failed
-    if (typeof originalCredits !== 'undefined' && photo) {
+    if (typeof originalCredits !== 'undefined' && model) {
       console.log('🔄 Refunding credit due to generation failure');
-      await supabase
+      await supabaseServer
         .from('user_billing')
         .update({ credits: originalCredits })
-        .eq('id', photo.user_id);
+        .eq('id', model.user_id);
     }
     
+    // Enhanced error logging with Supabase and environment details
     console.error('❌ Model generation error in API route:', error);
-    console.error('❌ Error details:', {
-      message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-      name: error instanceof Error ? error.name : 'Unknown',
-      error: error
+    
+    if (error instanceof Error) {
+      console.error('❌ Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+    } else {
+      console.error('❌ Non-Error object:', JSON.stringify(error));
+    }
+    
+    // Log environment configuration for debugging
+    console.error('⚠️ Environment configuration:', {
+      HUNYUAN3D_API_URL: process.env.HUNYUAN3D_API_URL,
+      HUNYUAN3D_API_KEY: process.env.HUNYUAN3D_API_KEY ? '***' : 'MISSING',
+      SUPABASE_URL: process.env.SUPABASE_URL,
+      NODE_ENV: process.env.NODE_ENV
     });
     
-    // Update photo status to job_creation_failed or model_generation_failed
-    if (photo) {
+    // Log user billing information if available
+    if (model) {
+      console.error('ℹ️ Model information:', {
+        id: model.id,
+        user_id: model.user_id,
+        model_status: model.model_status
+      });
+    }
+    
+    // Update model status to failed
+    if (model) {
       try {
-        // If we have a job ID, it means job creation succeeded but model generation failed
-        if (photo.job_id) {
-          await photoService.updatePhoto(photo.id, {
-            generation_status: 'model_generation_failed'
-          });
-          console.log('📝 Updated photo status to model_generation_failed');
-        } else {
-          // Otherwise, job creation failed
-          await photoService.updatePhoto(photo.id, {
-            generation_status: 'job_creation_failed'
-          });
-          console.log('📝 Updated photo status to job_creation_failed');
-        }
+        await modelService.updateModel(model.id, {
+          model_status: 'failed'
+        });
+        console.log('📝 Updated model status to failed');
       } catch (statusError) {
-        console.error('❌ Failed to update photo status:', statusError);
+        console.error('❌ Failed to update model status:', statusError);
       }
     }
     

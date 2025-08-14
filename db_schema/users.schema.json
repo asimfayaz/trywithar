@@ -1,0 +1,102 @@
+{
+  "table": "auth.users",
+  "columns": [
+    { "name": "instance_id", "type": "uuid", "nullable": true },
+    { "name": "id", "type": "uuid", "primary_key": true, "nullable": false },
+    { "name": "aud", "type": "character varying(255)", "nullable": true },
+    { "name": "role", "type": "character varying(255)", "nullable": true },
+    { "name": "email", "type": "character varying(255)", "nullable": true },
+    { "name": "encrypted_password", "type": "character varying(255)", "nullable": true },
+    { "name": "email_confirmed_at", "type": "timestamp with time zone", "nullable": true },
+    { "name": "invited_at", "type": "timestamp with time zone", "nullable": true },
+    { "name": "confirmation_token", "type": "character varying(255)", "nullable": true },
+    { "name": "confirmation_sent_at", "type": "timestamp with time zone", "nullable": true },
+    { "name": "recovery_token", "type": "character varying(255)", "nullable": true },
+    { "name": "recovery_sent_at", "type": "timestamp with time zone", "nullable": true },
+    { "name": "email_change_token_new", "type": "character varying(255)", "nullable": true },
+    { "name": "email_change", "type": "character varying(255)", "nullable": true },
+    { "name": "email_change_sent_at", "type": "timestamp with time zone", "nullable": true },
+    { "name": "last_sign_in_at", "type": "timestamp with time zone", "nullable": true },
+    { "name": "raw_app_meta_data", "type": "jsonb", "nullable": true },
+    { "name": "raw_user_meta_data", "type": "jsonb", "nullable": true },
+    { "name": "is_super_admin", "type": "boolean", "nullable": true },
+    { "name": "created_at", "type": "timestamp with time zone", "nullable": true },
+    { "name": "updated_at", "type": "timestamp with time zone", "nullable": true },
+    { "name": "phone", "type": "text", "nullable": true, "default": "null" },
+    { "name": "phone_confirmed_at", "type": "timestamp with time zone", "nullable": true },
+    { "name": "phone_change", "type": "text", "nullable": true, "default": "''" },
+    { "name": "phone_change_token", "type": "character varying(255)", "nullable": true, "default": "''" },
+    { "name": "phone_change_sent_at", "type": "timestamp with time zone", "nullable": true },
+    { "name": "confirmed_at", "type": "timestamp with time zone", "nullable": true, "generated": "LEAST(email_confirmed_at, phone_confirmed_at)" },
+    { "name": "email_change_token_current", "type": "character varying(255)", "nullable": true, "default": "''" },
+    { "name": "email_change_confirm_status", "type": "smallint", "nullable": true, "default": 0, "check": { "min": 0, "max": 2 } },
+    { "name": "banned_until", "type": "timestamp with time zone", "nullable": true },
+    { "name": "reauthentication_token", "type": "character varying(255)", "nullable": true, "default": "''" },
+    { "name": "reauthentication_sent_at", "type": "timestamp with time zone", "nullable": true },
+    { "name": "is_sso_user", "type": "boolean", "nullable": false, "default": false },
+    { "name": "deleted_at", "type": "timestamp with time zone", "nullable": true },
+    { "name": "is_anonymous", "type": "boolean", "nullable": false, "default": false }
+  ],
+  "constraints": [
+    { "type": "primary_key", "columns": ["id"] },
+    { "type": "unique", "columns": ["phone"], "name": "users_phone_key" },
+    { "type": "check", "name": "users_email_change_confirm_status_check", "expression": "email_change_confirm_status >= 0 AND email_change_confirm_status <= 2" }
+  ],
+  "indexes": [
+    {
+      "name": "confirmation_token_idx",
+      "columns": ["confirmation_token"],
+      "unique": true,
+      "where": "confirmation_token::text !~ '^[0-9 ]*$'"
+    },
+    {
+      "name": "email_change_token_current_idx",
+      "columns": ["email_change_token_current"],
+      "unique": true,
+      "where": "email_change_token_current::text !~ '^[0-9 ]*$'"
+    },
+    {
+      "name": "email_change_token_new_idx",
+      "columns": ["email_change_token_new"],
+      "unique": true,
+      "where": "email_change_token_new::text !~ '^[0-9 ]*$'"
+    },
+    {
+      "name": "reauthentication_token_idx",
+      "columns": ["reauthentication_token"],
+      "unique": true,
+      "where": "reauthentication_token::text !~ '^[0-9 ]*$'"
+    },
+    {
+      "name": "recovery_token_idx",
+      "columns": ["recovery_token"],
+      "unique": true,
+      "where": "recovery_token::text !~ '^[0-9 ]*$'"
+    },
+    {
+      "name": "users_email_partial_key",
+      "columns": ["email"],
+      "unique": true,
+      "where": "is_sso_user = false"
+    },
+    {
+      "name": "users_instance_id_email_idx",
+      "columns": ["instance_id", "lower(email::text)"]
+    },
+    {
+      "name": "users_instance_id_idx",
+      "columns": ["instance_id"]
+    },
+    {
+      "name": "users_is_anonymous_idx",
+      "columns": ["is_anonymous"]
+    }
+  ],
+  "triggers": [
+    {
+      "name": "on_auth_user_created_billing",
+      "event": "AFTER INSERT",
+      "function": "handle_new_user_billing"
+    }
+  ]
+}

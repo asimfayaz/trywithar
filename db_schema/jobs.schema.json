@@ -1,0 +1,65 @@
+{
+  "table": "public.jobs",
+  "columns": [
+    {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "gen_random_uuid()",
+      "constraints": ["primary key"]
+    },
+    {
+      "name": "external_job_id",
+      "type": "text",
+      "nullable": false,
+      "constraints": ["unique"]
+    },
+    { "name": "user_id", "type": "uuid", "nullable": true, "references": { "table": "auth.users", "column": "id", "on_delete": "CASCADE" } },
+    { "name": "api_status", "type": "text", "nullable": false, "default": "'queued'::text" },
+    { "name": "api_stage", "type": "text", "nullable": true, "default": "'queued'::text" },
+    { "name": "progress", "type": "integer", "nullable": true, "default": 0 },
+    { "name": "started_at", "type": "timestamp with time zone", "nullable": true },
+    { "name": "completed_at", "type": "timestamp with time zone", "nullable": true },
+    { "name": "model_url", "type": "text", "nullable": true },
+    { "name": "error_message", "type": "text", "nullable": true },
+    { "name": "created_at", "type": "timestamp with time zone", "nullable": true, "default": "now()" },
+    { "name": "updated_at", "type": "timestamp with time zone", "nullable": true, "default": "now()" }
+  ],
+  "constraints": [
+    { "type": "primary key", "columns": ["id"], "name": "jobs_pkey" },
+    { "type": "unique", "columns": ["external_job_id"], "name": "jobs_external_job_id_key" },
+    {
+      "type": "foreign key",
+      "columns": ["user_id"],
+      "references": { "table": "auth.users", "columns": ["id"], "on_delete": "CASCADE" },
+      "name": "fk_jobs_user_id"
+    },
+    {
+      "type": "check",
+      "name": "jobs_api_status_check",
+      "expression": "api_status IN ('queued','processing','completed','failed')"
+    },
+    {
+      "type": "check",
+      "name": "jobs_progress_check",
+      "expression": "progress >= 0 AND progress <= 100"
+    }
+  ],
+  "indexes": [
+    { "name": "idx_jobs_api_status", "columns": ["api_status"], "unique": false, "method": "btree" },
+    { "name": "idx_jobs_completed_at", "columns": ["completed_at"], "unique": false, "method": "btree" },
+    { "name": "idx_jobs_external_job_id", "columns": ["external_job_id"], "unique": false, "method": "btree" },
+    { "name": "idx_jobs_started_at", "columns": ["started_at"], "unique": false, "method": "btree" },
+    { "name": "idx_jobs_user_id", "columns": ["user_id"], "unique": false, "method": "btree" },
+    { "name": "idx_jobs_user_id_auth", "columns": ["user_id"], "unique": false, "method": "btree" }
+  ],
+  "triggers": [
+    {
+      "name": "update_jobs_updated_at",
+      "timing": "BEFORE",
+      "event": "UPDATE",
+      "level": "ROW",
+      "function": "update_updated_at_column()"
+    }
+  ]
+}

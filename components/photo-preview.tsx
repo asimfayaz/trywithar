@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { PhotoSet, UploadItem } from "@/app/page"
 import { ModelViewer } from "@/components/model-viewer"
+import type { ModelStatus } from "@/lib/supabase/types"
 
 interface PhotoPreviewProps {
   photoSet: PhotoSet
@@ -15,7 +16,7 @@ interface PhotoPreviewProps {
   onGenerate?: () => void
   canGenerate?: boolean
   isGenerating?: boolean
-  processingStage?: "pending" | "uploaded" | "processing" | "generating" | "ready" | "removing_background" | "failed"
+  processingStage?: ModelStatus
   modelUrl?: string
   selectedModel?: any
   errorMessage?: string
@@ -28,28 +29,13 @@ const positions = [
   { key: "back" as keyof PhotoSet, label: "Back", required: false },
 ]
 
-const stages = [
-  { key: "uploaded", label: "Photo uploaded", icon: "📤" },
-  { key: "removing_background", label: "Removing background", icon: "🎨" },
-  { key: "processing", label: "Queueing job", icon: "⏳" },
-  { key: "generating", label: "Generating 3D model", icon: "🎯" },
-  { key: "ready", label: "Model ready", icon: "✅" },
-  { key: "failed", label: "Failed", icon: "❌" },
-]
-
-// Mapping from backend status to UI stage
-const statusToStageMap: Record<string, string> = {
-  'uploaded': 'uploaded',
-  'bgr_removed': 'removing_background',
-  'job_created': 'processing',
-  'model_generated': 'generating',
-  'model_saved': 'ready',
-  'upload_failed': 'failed',
-  'bgr_removal_failed': 'failed',
-  'job_creation_failed': 'failed',
-  'model_generation_failed': 'failed',
-  'model_saving_failed': 'failed'
-}
+const stages: { key: ModelStatus; label: string; icon: string }[] = [
+  { key: 'uploading_photos', label: 'Uploading photos', icon: '📤' },
+  { key: 'removing_background', label: 'Removing background', icon: '🎨' },
+  { key: 'generating_3d_model', label: 'Generating 3D model', icon: '🎯' },
+  { key: 'completed', label: 'Model ready', icon: '✅' },
+  { key: 'failed', label: 'Failed', icon: '❌' },
+];
 
 // Error messages for different failure states
 const errorMessages: Record<string, string> = {
@@ -60,29 +46,11 @@ const errorMessages: Record<string, string> = {
   'model_saving_failed': 'Failed to save model'
 }
 
-// Helper function to get image source from UploadItem
-const getImageSrc = (item: UploadItem): string => {
-  if (item instanceof File) {
-    // Create object URL for actual File objects
-    return URL.createObjectURL(item);
-  } else if (item && typeof item === 'object' && item.url) {
-    // Return the URL directly for URL objects
-    return item.url;
-  } else if (typeof item === 'string') {
-    // Handle string URLs directly
-    return item;
-  }
-  // Fallback
-  return '';
-}
+// We removed getImageSrc and now use persistentUrl or blobUrl directly
 
 // Helper function to get expiration time for UploadItem
 const getExpirationTime = (item: UploadItem): Date | undefined => {
-  if (item instanceof File) {
-    return undefined
-  } else {
-    return item.expiresAt
-  }
+  return undefined; // Files don't have expiration
 }
 
 // Component for showing expiration countdown
@@ -141,6 +109,18 @@ export function PhotoPreview({
     back: false
   })
 
+  // Clean up blob URLs when component unmounts or photos change
+  useEffect(() => {
+    return () => {
+      // Revoke all blob URLs that don't have persistent URLs
+      Object.values(photoSet).forEach(item => {
+        if (item && item.dataUrl && !item.persistentUrl) {
+          // No need to revoke data URLs as they are in-memory
+        }
+      });
+    };
+  }, [photoSet]);
+
   const handleFileSelect = (position: keyof PhotoSet) => (e: React.ChangeEvent<HTMLInputElement>) => {
     if (disabled) return
     const file = e.target.files?.[0]
@@ -174,13 +154,13 @@ export function PhotoPreview({
     }
   }
 
-  const showModel = selectedModel?.status === "complete" && modelUrl
-  const showProcessing = (isGenerating || selectedModel?.status === "processing") && processingStage
-  const currentStageIndex = processingStage ? stages.findIndex((s) => s.key === processingStage) : -1
+  const showModel = selectedModel?.status === "completed" && modelUrl
+const showProcessing = (isGenerating || selectedModel?.status === "processing") && processingStage
+const currentStageIndex = processingStage ? stages.findIndex((s) => s.key === processingStage) : -1
 
-  // Disable photo controls when generating, processing, or model is complete
+  // Disable photo controls when generating, processing, or model is completed
   const photoControlsDisabled =
-    disabled || isGenerating || selectedModel?.status === "processing" || selectedModel?.status === "complete"
+    disabled || isGenerating || selectedModel?.status === "processing" || selectedModel?.status === "completed"
 
   return (
     <div className="h-full flex flex-col">
@@ -248,7 +228,7 @@ export function PhotoPreview({
                 {photo ? (
                   <div className="relative aspect-square w-full h-full">
                     <img
-                      src={getImageSrc(photo)}
+                      src={photo.persistentUrl || photo.dataUrl}
                       alt={`${label} view`}
                       className="w-full h-full object-cover rounded-lg"
                     />
@@ -297,29 +277,57 @@ export function PhotoPreview({
                       </div>
                     ) : (
                       <>
-                        <div
-                          className={cn(
-                            "w-8 h-8 rounded-full flex items-center justify-center mb-2",
-                            photoControlsDisabled ? "bg-gray-200" : "bg-gray-200",
-                          )}
+                  {selectedModel?.status === "completed" ? (
+                    <>
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center mb-2 bg-gray-200">
+                        <svg
+                          className="w-4 h-4 text-gray-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
                         >
-                          <svg
-                            className={cn("w-4 h-4", photoControlsDisabled ? "text-gray-400" : "text-gray-500")}
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                          </svg>
-                        </div>
-                        <span
-                          className={cn("text-xs font-medium", photoControlsDisabled ? "text-gray-400" : "text-gray-600")}
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                          />
+                        </svg>
+                      </div>
+                      <span className="text-xs font-medium text-gray-400">
+                        Model completed
+                      </span>
+                      <span className="text-xs mt-1 text-gray-400">
+                        Editing disabled
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <div
+                        className={cn(
+                          "w-8 h-8 rounded-full flex items-center justify-center mb-2",
+                          photoControlsDisabled ? "bg-gray-200" : "bg-gray-200",
+                        )}
+                      >
+                        <svg
+                          className={cn("w-4 h-4", photoControlsDisabled ? "text-gray-400" : "text-gray-500")}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
                         >
-                          {!photoControlsDisabled && isDragOver ? `Drop ${label.toLowerCase()} photo` : `Add ${label}`}
-                        </span>
-                        <span className={cn("text-xs mt-1", photoControlsDisabled ? "text-gray-400" : "text-gray-400")}>
-                          {!photoControlsDisabled ? "Click or drag" : "Locked"}
-                        </span>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </div>
+                      <span
+                        className={cn("text-xs font-medium", photoControlsDisabled ? "text-gray-400" : "text-gray-600")}
+                      >
+                        {!photoControlsDisabled && isDragOver ? `Drop ${label.toLowerCase()} photo` : `Add ${label}`}
+                      </span>
+                      <span className={cn("text-xs mt-1", photoControlsDisabled ? "text-gray-400" : "text-gray-400")}>
+                        {!photoControlsDisabled ? "Click or drag" : "Locked"}
+                      </span>
+                    </>
+                  )}
                       </>
                     )}
                   </div>
@@ -338,11 +346,11 @@ export function PhotoPreview({
             disabled={!canGenerate}
             className="w-full bg-blue-600 hover:bg-blue-700 h-12 text-base font-medium"
           >
-            {isGenerating
-              ? "Generating..."
-              : selectedModel.status === "complete"
-                ? "Regenerate 3D Model"
-                : "Generate 3D Model"}
+                  {isGenerating
+                    ? "Generating..."
+                    : selectedModel.status === "completed"
+                      ? "Regenerate 3D Model"
+                      : "Generate 3D Model"}
           </Button>
         </div>
       )}
@@ -364,7 +372,7 @@ export function PhotoPreview({
                     className={cn(
                       "w-6 h-6 rounded-full flex items-center justify-center text-xs flex-shrink-0",
                       isCompleted && "bg-green-500 text-white",
-                      isCurrent && stageItem.key !== "failed" && "bg-blue-500 text-white animate-pulse",
+                      isCurrent && stageItem.key !== "failed" && "bg-blue-500 text-white",
                       isCurrent && stageItem.key === "failed" && "bg-red-500 text-white",
                       isPending && "bg-gray-200 text-gray-500",
                     )}
@@ -435,14 +443,14 @@ export function PhotoPreview({
       <div className="text-center">
         <p className={cn("text-sm", photoControlsDisabled ? "text-gray-400" : "text-gray-500")}>
           {photoControlsDisabled
-            ? selectedModel?.status === "complete"
+            ? selectedModel?.status === "completed"
               ? ""
               : "Generation in progress..."
             : "Upload up to 4 photos for better 3D model quality"}
         </p>
         <p className={cn("text-xs mt-1", photoControlsDisabled ? "text-gray-400" : "text-gray-400")}>
           {photoControlsDisabled
-            ? selectedModel?.status === "complete"
+            ? selectedModel?.status === "completed"
               ? ""
               : "Please wait while processing"
             : "Front photo is required. Left, Right, and Back are optional."}

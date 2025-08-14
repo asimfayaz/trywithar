@@ -27,6 +27,7 @@ const nextConfig = {
     R2_MODELS_BUCKET: process.env.R2_MODELS_BUCKET,
     SUPABASE_URL: process.env.SUPABASE_URL,
     SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     HUNYUAN3D_API_URL: process.env.HUNYUAN3D_API_URL,
   }
 }

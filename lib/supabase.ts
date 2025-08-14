@@ -34,8 +34,6 @@ export type Job = {
   id: string;
   external_job_id: string; // job_id from Hunyuan3D API
   user_id: string;
-  photo_id: string;
-  source_photo_id?: string | null; // Reference to original photo for generation jobs
   api_status: 'queued' | 'processing' | 'completed' | 'failed';
   api_stage?: string | null;
   progress: number;

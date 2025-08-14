@@ -1,0 +1,16 @@
+{
+  "table": "user_billing",
+  "columns": [
+    { "name": "id", "type": "uuid", "primary_key": true, "foreign_key": {"table": "auth.users", "column": "id"}, "nullable": false },
+    { "name": "credits", "type": "numeric(10,2)", "nullable": true, "default": 2 },
+    { "name": "created_at", "type": "timestamp with time zone", "nullable": true, "default": "now()" },
+    { "name": "updated_at", "type": "timestamp with time zone", "nullable": true, "default": "now()" },
+    { "name": "total_models_generated", "type": "integer", "nullable": false, "default": 0 }
+  ],
+  "indexes": [
+    { "name": "idx_user_billing_id", "columns": ["id"] }
+  ],
+  "triggers": [
+    { "name": "update_user_billing_updated_at", "event": "BEFORE UPDATE", "function": "update_updated_at_column" }
+  ]
+}

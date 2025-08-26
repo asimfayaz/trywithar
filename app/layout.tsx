@@ -1,6 +1,7 @@
 import type React from "react"
 import type { Metadata } from "next"
 import "./globals.css"
+import { JobPollingProvider } from "@/components/job-polling-provider"
 
 export const metadata: Metadata = {
   title: "Try with AR",
@@ -21,7 +22,10 @@ export default function RootLayout({
           src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"
         />
       </head>
-      <body className="font-sans antialiased">{children}</body>
+      <body className="font-sans antialiased">
+        {children}
+        <JobPollingProvider />
+      </body>
     </html>
   )
 }

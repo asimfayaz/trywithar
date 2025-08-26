@@ -6,6 +6,22 @@ export type ModelStatus =
   | 'completed'
   | 'failed';
 
+export type PredictionStatus = "starting" | "processing" | "succeeded" | "failed" | "canceled";
+
+export type Job = {
+  id: string;
+  user_id: string;
+  external_job_id: string;
+  api_status: PredictionStatus;
+  api_stage?: string;
+  progress?: number;
+  model_url?: string;
+  error_message?: string;
+  created_at: string;
+  updated_at: string;
+  expires_at: string; // new field
+};
+
 export type Model = {
   id: string;
   user_id: string;
@@ -22,5 +38,4 @@ export type Model = {
   job_id?: string;
   created_at: string;
   updated_at: string;
-  expires_at?: string;
 };

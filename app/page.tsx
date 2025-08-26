@@ -220,6 +220,19 @@ export default function Home() {
     }
   }
 
+  // Listen for manual refresh events from the gallery
+  useEffect(() => {
+    const handleRefreshModels = () => {
+      loadUserPhotos();
+    };
+
+    window.addEventListener('refreshModels', handleRefreshModels);
+
+    return () => {
+      window.removeEventListener('refreshModels', handleRefreshModels);
+    };
+  }, []);
+
   // Load photos when user changes
   useEffect(() => {
     if (user) {
@@ -435,13 +448,33 @@ const newModel: ModelData = {
       if (!frontFile) throw new Error('Front draft file not found');
       
       const otherViews = ['left', 'right', 'back'] as const;
-      const viewFiles: Record<string, File> = {};
       
+      // Upload original photos for all views
+      const { uploadOriginalImageToR2 } = await import('@/lib/backgroundRemoval');
+      const uploadPromises = [];
+      
+      // Upload front photo
+      uploadPromises.push(uploadOriginalImageToR2(frontFile).then(result => {
+        return { position: 'front', url: result.url };
+      }));
+      
+      // Upload other views
       for (const view of otherViews) {
         const uploadItem = currentPhotoSet[view as keyof PhotoSet];
         if (uploadItem) {
-          viewFiles[view] = uploadItem.file;
+          uploadPromises.push(uploadOriginalImageToR2(uploadItem.file).then(result => {
+            return { position: view, url: result.url };
+          }));
         }
+      }
+      
+      // Wait for all uploads to complete
+      const uploadResults = await Promise.all(uploadPromises);
+      
+      // Create a map of URLs by position
+      const urlMap: Record<string, string> = {};
+      for (const result of uploadResults) {
+        urlMap[result.position] = result.url;
       }
 
       const modelRecord = {
@@ -466,16 +499,15 @@ const updatedModel: ModelData = {
       ));
       setSelectedModel(updatedModel);
 
-      const { uploadOriginalImageToR2 } = await import('@/lib/backgroundRemoval');
-      const uploadResult = await uploadOriginalImageToR2(frontFile);
-      
-      if (!uploadResult || !uploadResult.url) {
-        throw new Error('Failed to upload raw image to R2 - no URL returned');
-      }
+      // This duplicate upload call was removed since we already uploaded the front file
+      // in the batch upload above
       
       await modelService.updateModel(createdModel.id, {
         model_status: 'removing_background',
-        front_image_url: uploadResult.url
+        front_image_url: urlMap.front,
+        ...(urlMap.left && { left_image_url: urlMap.left }),
+        ...(urlMap.right && { right_image_url: urlMap.right }),
+        ...(urlMap.back && { back_image_url: urlMap.back })
       });
 
       setSelectedModel(prev => {
@@ -545,11 +577,19 @@ const updatedModel: ModelData = {
         };
       });
 
+      // Send pre-uploaded URLs instead of file objects
       const formData = new FormData();
-      formData.append('front', new File([bgResult.blob], 'processed.png', { type: 'image/png' }));
+      formData.append('frontUrl', publicUrl); // Use the background-removed URL for front
       
-      for (const [view, file] of Object.entries(viewFiles)) {
-        formData.append(view, file);
+      // Add URLs for other views if they exist
+      if (currentPhotoSet.left?.persistentUrl) {
+        formData.append('leftUrl', currentPhotoSet.left.persistentUrl);
+      }
+      if (currentPhotoSet.right?.persistentUrl) {
+        formData.append('rightUrl', currentPhotoSet.right.persistentUrl);
+      }
+      if (currentPhotoSet.back?.persistentUrl) {
+        formData.append('backUrl', currentPhotoSet.back.persistentUrl);
       }
       
       formData.append('options', JSON.stringify({
@@ -572,10 +612,7 @@ const updatedModel: ModelData = {
       
       const jobResponse = await response.json();
       jobId = jobResponse.job_id;
-      await modelService.updateModel(createdModel.id, {
-        job_id: jobId
-      });
-
+      
       setModels(prev => prev.map(model => 
         model.id === createdModel.id 
           ? { 
@@ -792,6 +829,38 @@ const updatedModel: ModelData = {
       checkJobs();
     } else {
       setIsLoading(false);
+    }
+  }, [models]);
+
+  // Real-time updates for models
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('models-updates')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'models',
+        filter: `user_id=eq.${user.id}`
+      }, (payload) => {
+        // Refresh models list when any model is updated
+        loadUserPhotos();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
+  // Update selected model when models are updated
+  useEffect(() => {
+    if (selectedModel) {
+      const updatedModel = models.find(model => model.id === selectedModel.id);
+      if (updatedModel && updatedModel.updatedAt > selectedModel.updatedAt) {
+        setSelectedModel(updatedModel);
+      }
     }
   }, [models]);
 

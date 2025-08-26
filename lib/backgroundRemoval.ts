@@ -5,7 +5,6 @@ type BackgroundRemovalResult = {
   blob: Blob;
   imageUrl: string;
   fileName: string;
-  originalImageUrl: string;
   processedImageUrl: string;
 };
 
@@ -19,8 +18,7 @@ export async function removeBackgroundFromImage(
   try {
     console.log('Starting client-side background removal for:', file.name);
     
-    // Upload original image to R2
-    const originalUploadResult = await uploadOriginalImageToR2(file);
+    // Original upload removed - already handled by batch upload
     
     // Configure background removal
     const config: Config = {
@@ -47,7 +45,6 @@ export async function removeBackgroundFromImage(
       blob,
       imageUrl,
       fileName,
-      originalImageUrl: originalUploadResult.url,
       processedImageUrl: processedUploadResult.url,
     };
   } catch (error) {

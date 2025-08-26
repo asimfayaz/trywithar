@@ -10,6 +10,13 @@ interface ImageGalleryProps {
 }
 
 export function ImageGallery({ models, onSelectModel, selectedModelId }: ImageGalleryProps) {
+  const handleRefresh = () => {
+    // This will trigger a parent component refresh
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('refreshModels'));
+    }
+  };
+
   if (models.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-gray-500">
@@ -29,8 +36,24 @@ export function ImageGallery({ models, onSelectModel, selectedModelId }: ImageGa
   }
 
   return (
-    <div className="overflow-y-auto -mr-2 pr-2 h-full max-h-full">
-      <div className="grid grid-cols-2 gap-3">
+    <div className="overflow-y-auto -mr-2 pr-2 h-full max-h-full flex flex-col">
+      <div className="flex justify-end mb-2">
+        <button 
+          onClick={handleRefresh}
+          className="flex items-center text-sm text-gray-500 hover:text-gray-700"
+        >
+          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
+          </svg>
+          Refresh
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-3 flex-1">
         {models.map((model) => (
           <div
             key={model.id}
@@ -54,18 +77,6 @@ export function ImageGallery({ models, onSelectModel, selectedModelId }: ImageGa
 
             {/* Status Badge */}
             <div className="absolute top-2 right-2">
-              {model.processingStage === "uploading" && (
-                <div className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
-                  <div className="w-2 h-2 bg-white rounded-full mr-1 animate-pulse" />
-                  Uploading...
-                </div>
-              )}
-              {model.processingStage === "uploaded" && (
-                <div className="bg-gray-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
-                  <div className="w-2 h-2 bg-white rounded-full mr-1" />
-                  Uploaded
-                </div>
-              )}
               {model.status === "pending" && (
                 <div className="bg-gray-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
                   <div className="w-2 h-2 bg-white rounded-full mr-1" />

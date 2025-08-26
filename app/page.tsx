@@ -43,6 +43,7 @@ export interface ModelData {
   processingStage?: ModelStatus | undefined
   photoSet: PhotoSet
   sourcePhotoId?: string;
+  error?: string; // Add error property for failed state
 }
 
 export interface User {
@@ -189,29 +190,30 @@ export default function Home() {
     'removing_background': { status: 'processing', processingStage: 'removing_background' },
     'generating_3d_model': { status: 'processing', processingStage: 'generating_3d_model' },
     'completed': { status: 'completed', processingStage: 'completed' },
-    'failed': { status: 'failed' }
+    'failed': { status: 'failed', processingStage: 'failed' }
   };
 
         const mapping = statusMap[model.model_status] || { status: 'failed' };
         status = mapping.status as any;
         processingStage = mapping.processingStage;
           
-        return {
-          id: model.id,
-          thumbnail: model.front_image_url || '/placeholder.svg?height=150&width=150',
-          status,
-          modelUrl: model.model_url || undefined,
-          uploadedAt: new Date(model.created_at),
-          updatedAt: new Date(model.updated_at),
-          jobId: model.job_id || undefined,
-          processingStage,
-          photoSet: { 
-            front: {
-              file: new File([], 'front.jpg'),
-              dataUrl: model.front_image_url || '/placeholder.svg?height=150&width=150'
-            }
-          }
-        }
+return {
+  id: model.id,
+  thumbnail: model.front_image_url || '/placeholder.svg?height=150&width=150',
+  status,
+  modelUrl: model.model_url || undefined,
+  uploadedAt: new Date(model.created_at),
+  updatedAt: new Date(model.updated_at),
+  jobId: model.job_id || undefined,
+  processingStage,
+  photoSet: { 
+    front: {
+      file: new File([], 'front.jpg'),
+      dataUrl: model.front_image_url || '/placeholder.svg?height=150&width=150'
+    }
+  },
+  error: undefined // Initialize error as undefined
+}
       })
       
       setModels(modelData)
@@ -220,18 +222,6 @@ export default function Home() {
     }
   }
 
-  // Listen for manual refresh events from the gallery
-  useEffect(() => {
-    const handleRefreshModels = () => {
-      loadUserPhotos();
-    };
-
-    window.addEventListener('refreshModels', handleRefreshModels);
-
-    return () => {
-      window.removeEventListener('refreshModels', handleRefreshModels);
-    };
-  }, []);
 
   // Load photos when user changes
   useEffect(() => {
@@ -289,16 +279,17 @@ export default function Home() {
 
       if (position === "front") {
         const tempId = `temp-${Date.now()}`;
-  const previewModel: ModelData = {
-    id: tempId,
-    thumbnail: dataUrl,
-    status: "pending",
-    uploadedAt: new Date(),
-    updatedAt: new Date(),
-    photoSet: { front: uploadItem },
-    processingStage: 'uploading_photos',
-    isTemporary: true,
-  };
+const previewModel: ModelData = {
+  id: tempId,
+  thumbnail: dataUrl,
+  status: "pending",
+  uploadedAt: new Date(),
+  updatedAt: new Date(),
+  photoSet: { front: uploadItem },
+  processingStage: 'uploading_photos',
+  isTemporary: true,
+  error: undefined // Initialize error
+};
 
         setSelectedModel(previewModel);
         setCurrentPhotoSet({ front: uploadItem });
@@ -436,6 +427,7 @@ const newModel: ModelData = {
   processingStage: 'draft',
   updatedAt: new Date(),
   isTemporary: false,
+  error: undefined // Reset error when retrying
 };
 
     setModels(prev => [newModel, ...prev]);
@@ -649,7 +641,7 @@ const updatedModel: ModelData = {
             ? { 
                 ...model, 
                 status: "failed", 
-                processingStage: undefined,
+                processingStage: 'failed',
                 error: error instanceof Error ? error.message : 'Failed to generate model'
               } 
             : model,
@@ -661,7 +653,7 @@ const updatedModel: ModelData = {
           ? { 
               ...prev, 
               status: "failed", 
-              processingStage: undefined,
+              processingStage: 'failed',
               error: error instanceof Error ? error.message : 'Failed to generate model'
             } 
           : prev
@@ -697,7 +689,7 @@ const updatedModel: ModelData = {
           model.jobId === jobId ? {
             ...model,
             status: 'failed',
-            processingStage: undefined,
+            processingStage: 'failed',
             error: 'Job not found'
           } : model
         ));
@@ -706,7 +698,7 @@ const updatedModel: ModelData = {
           setSelectedModel(prev => prev ? {
             ...prev,
             status: 'failed',
-            processingStage: undefined,
+            processingStage: 'failed',
             error: 'Job not found'
           } : prev);
         }
@@ -751,7 +743,7 @@ const updatedModel: ModelData = {
           model.jobId === jobId ? {
             ...model,
             status: 'failed',
-            processingStage: undefined,
+            processingStage: 'failed',
             error: 'Model generation failed'
           } : model
         ));
@@ -760,7 +752,7 @@ const updatedModel: ModelData = {
           setSelectedModel(prev => prev ? {
             ...prev,
             status: 'failed',
-            processingStage: undefined,
+            processingStage: 'failed',
             error: 'Model generation failed'
           } : prev);
         }
@@ -776,7 +768,7 @@ const updatedModel: ModelData = {
           model.jobId === jobId ? {
             ...model,
             status: 'failed',
-            processingStage: undefined,
+            processingStage: 'failed',
             error: 'Failed to check job status'
           } : model
         ));
@@ -785,7 +777,7 @@ const updatedModel: ModelData = {
           setSelectedModel(prev => prev ? {
             ...prev,
             status: 'failed',
-            processingStage: undefined,
+            processingStage: 'failed',
             error: 'Failed to check job status'
           } : prev);
         }
@@ -967,34 +959,29 @@ const updatedModel: ModelData = {
           </div>
 
           <div className="flex-1 min-h-0 flex flex-col">
-            {selectedModel ? (
-              selectedModel.status === "failed" ? (
-                <div className="flex items-center justify-center flex-1 text-red-500">
-                  <p>Model generation failed. Please try again.</p>
-                </div>
-              ) : (
-                <div className="flex-1 min-h-0">
-                  <PhotoPreview
-                    photoSet={currentPhotoSet}
-                    processingStage={selectedModel.processingStage}
-                    modelUrl={selectedModel.modelUrl}
-                    selectedModel={selectedModel}
-                    onUpload={(fileOrItem, position) => {
-                      if (fileOrItem instanceof File) {
-                        handleUpload(fileOrItem, position);
-                      } else {
-                        handleUpload(fileOrItem.file, position);
-                      }
-                    }}
-                    onRemove={(position) => handleRemovePhoto(position)}
-                    disabled={false}
-                    onGenerate={handleGenerateModel}
-                    canGenerate={canGenerate}
-                    isGenerating={isGenerating}
-                  />
-                </div>
-              )
-            ) : (
+{selectedModel ? (
+  <div className="flex-1 min-h-0">
+    <PhotoPreview
+      photoSet={currentPhotoSet}
+      processingStage={selectedModel.processingStage}
+      modelUrl={selectedModel.modelUrl}
+      selectedModel={selectedModel}
+      onUpload={(fileOrItem, position) => {
+        if (fileOrItem instanceof File) {
+          handleUpload(fileOrItem, position);
+        } else {
+          handleUpload(fileOrItem.file, position);
+        }
+      }}
+      onRemove={(position) => handleRemovePhoto(position)}
+      disabled={false}
+      onGenerate={handleGenerateModel}
+      canGenerate={canGenerate}
+      isGenerating={isGenerating}
+      errorMessage={selectedModel.status === "failed" ? selectedModel.error : undefined}
+    />
+  </div>
+) : (
               <div className="flex flex-col items-center justify-center flex-1 text-gray-500">
                 <div className="text-center">
                   <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">

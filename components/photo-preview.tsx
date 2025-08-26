@@ -33,8 +33,6 @@ const stages: { key: ModelStatus; label: string; icon: string }[] = [
   { key: 'uploading_photos', label: 'Uploading photos', icon: '📤' },
   { key: 'removing_background', label: 'Removing background', icon: '🎨' },
   { key: 'generating_3d_model', label: 'Generating 3D model', icon: '🎯' },
-  { key: 'completed', label: 'Model ready', icon: '✅' },
-  { key: 'failed', label: 'Failed', icon: '❌' },
 ];
 
 // Error messages for different failure states
@@ -155,7 +153,10 @@ export function PhotoPreview({
   }
 
   const showModel = selectedModel?.status === "completed" && modelUrl
-const showProcessing = (isGenerating || selectedModel?.status === "processing") && processingStage
+const showProcessing = (isGenerating || 
+                       selectedModel?.status === "processing" || 
+                       selectedModel?.status === "failed") && 
+                       processingStage
 const currentStageIndex = processingStage ? stages.findIndex((s) => s.key === processingStage) : -1
 
   // Disable photo controls when generating, processing, or model is completed
@@ -361,9 +362,15 @@ const currentStageIndex = processingStage ? stages.findIndex((s) => s.key === pr
           <h3 className="text-sm font-medium text-gray-900 mb-3">Generation Progress</h3>
           <div className="space-y-3">
             {stages.map((stageItem, index) => {
-              const isCompleted = index < currentStageIndex
-              const isCurrent = index === currentStageIndex
-              const isPending = index > currentStageIndex
+              // Adjust stage index for failed models to show first two as completed
+              let adjustedStageIndex = currentStageIndex;
+              if (selectedModel?.status === "failed") {
+                adjustedStageIndex = 2; // Generating 3D model step
+              }
+
+              const isCompleted = index < adjustedStageIndex
+              const isCurrent = index === adjustedStageIndex
+              const isPending = index > adjustedStageIndex
 
               return (
                 <div key={stageItem.key} className="flex items-center space-x-3">
@@ -372,12 +379,12 @@ const currentStageIndex = processingStage ? stages.findIndex((s) => s.key === pr
                     className={cn(
                       "w-6 h-6 rounded-full flex items-center justify-center text-xs flex-shrink-0",
                       isCompleted && "bg-green-500 text-white",
-                      isCurrent && stageItem.key !== "failed" && "bg-blue-500 text-white",
-                      isCurrent && stageItem.key === "failed" && "bg-red-500 text-white",
+                      isCurrent && selectedModel?.status === "processing" && "bg-blue-500 text-white",
+                      isCurrent && selectedModel?.status === "failed" && "bg-red-500 text-white",
                       isPending && "bg-gray-200 text-gray-500",
                     )}
                   >
-                    {isCompleted ? (
+                    {isCompleted || (index === 2 && selectedModel?.status === "completed") ? (
                       <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                         <path
                           fillRule="evenodd"
@@ -385,7 +392,7 @@ const currentStageIndex = processingStage ? stages.findIndex((s) => s.key === pr
                           clipRule="evenodd"
                         />
                       </svg>
-                    ) : isCurrent && stageItem.key === "failed" ? (
+                    ) : isCurrent && selectedModel?.status === "failed" ? (
                       <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                         <path
                           fillRule="evenodd"
@@ -405,19 +412,19 @@ const currentStageIndex = processingStage ? stages.findIndex((s) => s.key === pr
                     className={cn(
                       "text-sm font-medium",
                       isCompleted && "text-green-600",
-                      isCurrent && stageItem.key !== "failed" && "text-blue-600",
-                      isCurrent && stageItem.key === "failed" && "text-red-600",
+                      isCurrent && selectedModel?.status === "processing" && "text-blue-600",
+                      isCurrent && selectedModel?.status === "failed" && "text-red-600",
                       isPending && "text-gray-500",
                     )}
                   >
                     {stageItem.label}
-                    {isCurrent && stageItem.key === "failed" && errorMessage && (
+                    {isCurrent && selectedModel?.status === "failed" && errorMessage && (
                       <span className="ml-2 text-xs text-red-500">({errorMessage})</span>
                     )}
                   </span>
 
                   {/* Loading indicator for current stage */}
-                  {isCurrent && (
+                  {isCurrent && selectedModel?.status === "processing" && (
                     <div className="flex-1 flex justify-end">
                       <div className="flex space-x-1">
                         <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" />

@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import "./globals.css"
 import { JobPollingProvider } from "@/components/job-polling-provider"
+import { Toaster } from "@/components/ui/sonner"
 
 export const metadata: Metadata = {
   title: "Try with AR",
@@ -25,6 +26,7 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         {children}
         <JobPollingProvider />
+        <Toaster position="top-center" richColors />
       </body>
     </html>
   )

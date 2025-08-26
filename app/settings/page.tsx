@@ -7,9 +7,15 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
+import { toast } from "sonner"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,10 +36,16 @@ export default function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
-  const [emailNotifications, setEmailNotifications] = useState(true)
-  const [marketingEmails, setMarketingEmails] = useState(false)
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoadingData, setIsLoadingData] = useState(true)
+  const [passwordRequirements, setPasswordRequirements] = useState({
+    hasLength: false,
+    hasUppercase: false,
+    hasLowercase: false,
+    hasNumber: false,
+    hasSpecialChar: false
+  })
+  const [showPasswordMeter, setShowPasswordMeter] = useState(false)
 
   // Get session and load user data
   useEffect(() => {
@@ -61,26 +73,56 @@ export default function SettingsPage() {
     loadSessionAndUser()
   }, [])
 
+  // Check password strength requirements
+  useEffect(() => {
+    setPasswordRequirements({
+      hasLength: newPassword.length >= 8,
+      hasUppercase: /[A-Z]/.test(newPassword),
+      hasLowercase: /[a-z]/.test(newPassword),
+      hasNumber: /[0-9]/.test(newPassword),
+      hasSpecialChar: /[!@#$%^&*(),.?":{}|<>]/.test(newPassword)
+    })
+    
+    // Show meter only when user starts typing
+    if (newPassword.length > 0 && !showPasswordMeter) {
+      setShowPasswordMeter(true)
+    } else if (newPassword.length === 0 && showPasswordMeter) {
+      setShowPasswordMeter(false)
+    }
+  }, [newPassword, showPasswordMeter])
+
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (newPassword !== confirmPassword) {
-      alert("New passwords don't match!")
+      toast.error("New passwords don't match!")
       return
     }
 
-    if (newPassword.length < 8) {
-      alert("Password must be at least 8 characters long!")
+    // Check password strength
+    const isPasswordStrong = Object.values(passwordRequirements).every(Boolean)
+    if (!isPasswordStrong) {
+      toast.error("Password must be at least 8 characters with uppercase, lowercase, number, and special character")
       return
     }
 
     if (!currentPassword) {
-      alert("Please enter your current password!")
+      toast.error("Please enter your current password!")
       return
     }
 
     setIsLoading(true)
     try {
+      // Verify current password
+      const { error: verifyError } = await supabase.auth.signInWithPassword({
+        email: user?.email || '',
+        password: currentPassword
+      })
+      
+      if (verifyError) {
+        throw new Error("Current password is incorrect")
+      }
+
       // Update password using Supabase Auth
       const { error } = await supabase.auth.updateUser({
         password: newPassword
@@ -88,16 +130,16 @@ export default function SettingsPage() {
 
       if (error) throw error
       
-      alert("Password updated successfully!")
+      toast.success("Password updated successfully!")
       setCurrentPassword("")
       setNewPassword("")
       setConfirmPassword("")
     } catch (error) {
       console.error('Password update failed:', error)
       if (error instanceof Error) {
-        alert(`Failed to update password: ${error.message}`)
+        toast.error(`Failed to update password: ${error.message}`)
       } else {
-        alert('Failed to update password. Please try again.')
+        toast.error('Failed to update password. Please try again.')
       }
     } finally {
       setIsLoading(false)
@@ -198,17 +240,127 @@ export default function SettingsPage() {
                   required
                 />
               </div>
-              <div>
-                <Label htmlFor="newPassword">New Password</Label>
+              <div className="space-y-2">
+                <div className="flex items-center">
+                  <Label htmlFor="newPassword">New Password</Label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button 
+                          type="button" 
+                          className="ml-1 text-gray-400 hover:text-gray-600 focus:outline-none"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="bg-white shadow-lg p-3 rounded-md">
+                        <div className="space-y-1 text-sm">
+                          <div className="flex items-center">
+                            <span className={`mr-1 ${passwordRequirements.hasLength ? 'text-green-500' : 'text-gray-400'}`}>
+                              {passwordRequirements.hasLength ? '✓' : '•'}
+                            </span>
+                            <span>At least 8 characters</span>
+                          </div>
+                          <div className="flex items-center">
+                            <span className={`mr-1 ${passwordRequirements.hasUppercase ? 'text-green-500' : 'text-gray-400'}`}>
+                              {passwordRequirements.hasUppercase ? '✓' : '•'}
+                            </span>
+                            <span>Uppercase letter</span>
+                          </div>
+                          <div className="flex items-center">
+                            <span className={`mr-1 ${passwordRequirements.hasLowercase ? 'text-green-500' : 'text-gray-400'}`}>
+                              {passwordRequirements.hasLowercase ? '✓' : '•'}
+                            </span>
+                            <span>Lowercase letter</span>
+                          </div>
+                          <div className="flex items-center">
+                            <span className={`mr-1 ${passwordRequirements.hasNumber ? 'text-green-500' : 'text-gray-400'}`}>
+                              {passwordRequirements.hasNumber ? '✓' : '•'}
+                            </span>
+                            <span>Number</span>
+                          </div>
+                          <div className="flex items-center">
+                            <span className={`mr-1 ${passwordRequirements.hasSpecialChar ? 'text-green-500' : 'text-gray-400'}`}>
+                              {passwordRequirements.hasSpecialChar ? '✓' : '•'}
+                            </span>
+                            <span>Special character</span>
+                          </div>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <Input
                   id="newPassword"
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
-                  minLength={8}
                 />
-                <p className="text-sm text-gray-500 mt-1">Must be at least 8 characters long</p>
+                
+                {/* Password strength meter - only shown when typing */}
+                {showPasswordMeter && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="mt-1">
+                          <div className="flex items-center">
+                            <div className="w-full bg-gray-200 rounded-full h-2.5">
+                              <div 
+                                className={`h-2.5 rounded-full ${
+                                  Object.values(passwordRequirements).filter(Boolean).length > 3 
+                                    ? 'bg-green-500' 
+                                    : Object.values(passwordRequirements).filter(Boolean).length > 2 
+                                      ? 'bg-yellow-500' 
+                                      : 'bg-red-500'
+                                }`}
+                                style={{ 
+                                  width: `${(Object.values(passwordRequirements).filter(Boolean).length / 5) * 100}%` 
+                                }}
+                              ></div>
+                            </div>
+                          </div>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent className="bg-white shadow-lg p-3 rounded-md">
+                        <div className="space-y-1 text-sm">
+                          <div className="flex items-center">
+                            <span className={`mr-1 ${passwordRequirements.hasLength ? 'text-green-500' : 'text-gray-400'}`}>
+                              {passwordRequirements.hasLength ? '✓' : '•'}
+                            </span>
+                            <span>At least 8 characters</span>
+                          </div>
+                          <div className="flex items-center">
+                            <span className={`mr-1 ${passwordRequirements.hasUppercase ? 'text-green-500' : 'text-gray-400'}`}>
+                              {passwordRequirements.hasUppercase ? '✓' : '•'}
+                            </span>
+                            <span>Uppercase letter</span>
+                          </div>
+                          <div className="flex items-center">
+                            <span className={`mr-1 ${passwordRequirements.hasLowercase ? 'text-green-500' : 'text-gray-400'}`}>
+                              {passwordRequirements.hasLowercase ? '✓' : '•'}
+                            </span>
+                            <span>Lowercase letter</span>
+                          </div>
+                          <div className="flex items-center">
+                            <span className={`mr-1 ${passwordRequirements.hasNumber ? 'text-green-500' : 'text-gray-400'}`}>
+                              {passwordRequirements.hasNumber ? '✓' : '•'}
+                            </span>
+                            <span>Number</span>
+                          </div>
+                          <div className="flex items-center">
+                            <span className={`mr-1 ${passwordRequirements.hasSpecialChar ? 'text-green-500' : 'text-gray-400'}`}>
+                              {passwordRequirements.hasSpecialChar ? '✓' : '•'}
+                            </span>
+                            <span>Special character</span>
+                          </div>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
               </div>
               <div>
                 <Label htmlFor="confirmPassword">Confirm New Password</Label>
@@ -221,34 +373,17 @@ export default function SettingsPage() {
                 />
               </div>
               <Button type="submit" disabled={isLoading}>
-                {isLoading ? "Updating..." : "Update Password"}
+                {isLoading ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Updating...
+                  </>
+                ) : "Update Password"}
               </Button>
             </form>
-          </CardContent>
-        </Card>
-
-        {/* Notification Preferences */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Notification Preferences</CardTitle>
-            <CardDescription>Manage how you receive notifications from us</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="email-notifications">Email Notifications</Label>
-                <p className="text-sm text-gray-500">Receive notifications about your 3D model generation status</p>
-              </div>
-              <Switch id="email-notifications" checked={emailNotifications} onCheckedChange={setEmailNotifications} />
-            </div>
-            <Separator />
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="marketing-emails">Marketing Emails</Label>
-                <p className="text-sm text-gray-500">Receive updates about new features and promotions</p>
-              </div>
-              <Switch id="marketing-emails" checked={marketingEmails} onCheckedChange={setMarketingEmails} />
-            </div>
           </CardContent>
         </Card>
 

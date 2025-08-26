@@ -923,7 +923,8 @@ const updatedModel: ModelData = {
   }
 
   const hasPhotos = Object.keys(currentPhotoSet).length > 0
-  const canGenerate = currentPhotoSet.front && !isGenerating && selectedModel?.status !== "processing"
+  const photoControlsDisabled = selectedModel?.status === "processing" || selectedModel?.status === "completed" || selectedModel?.status === "failed";
+  const canGenerate = currentPhotoSet.front && !isGenerating && selectedModel?.status !== "processing" && selectedModel?.status !== "failed";
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -974,7 +975,7 @@ const updatedModel: ModelData = {
         }
       }}
       onRemove={(position) => handleRemovePhoto(position)}
-      disabled={false}
+      disabled={photoControlsDisabled}
       onGenerate={handleGenerateModel}
       canGenerate={canGenerate}
       isGenerating={isGenerating}

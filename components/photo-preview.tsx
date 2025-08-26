@@ -449,18 +449,10 @@ const currentStageIndex = processingStage ? stages.findIndex((s) => s.key === pr
       {/* Instructions */}
       <div className="text-center">
         <p className={cn("text-sm", photoControlsDisabled ? "text-gray-400" : "text-gray-500")}>
-          {photoControlsDisabled
-            ? selectedModel?.status === "completed"
-              ? ""
-              : "Generation in progress..."
-            : "Upload up to 4 photos for better 3D model quality"}
+          {(!selectedModel || selectedModel?.status === "pending") && "Upload up to 4 photos for better 3D model quality"}
         </p>
         <p className={cn("text-xs mt-1", photoControlsDisabled ? "text-gray-400" : "text-gray-400")}>
-          {photoControlsDisabled
-            ? selectedModel?.status === "completed"
-              ? ""
-              : "Please wait while processing"
-            : "Front photo is required. Left, Right, and Back are optional."}
+          {(!selectedModel || selectedModel?.status === "pending") && "Front photo is required. Left, Right, and Back are optional."}
         </p>
       </div>
     </div>

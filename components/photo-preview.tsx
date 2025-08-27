@@ -418,6 +418,16 @@ const currentStageIndex = processingStage ? stages.findIndex((s) => s.key === pr
                     )}
                   >
                     {stageItem.label}
+                    {stageItem.key === 'generating_3d_model' && 
+                     isCurrent && 
+                     selectedModel?.status === "failed" && (
+                      <button 
+                        onClick={onGenerate}
+                        className="text-sm text-blue-500 hover:text-blue-700 ml-6 hover:underline"
+                      >
+                        Retry?
+                      </button>
+                    )}
                     {isCurrent && selectedModel?.status === "failed" && errorMessage && (
                       <span className="ml-2 text-xs text-red-500">({errorMessage})</span>
                     )}

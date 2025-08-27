@@ -8,7 +8,7 @@ import type { PhotoSet, UploadItem } from "@/app/page"
 import { ModelViewer } from "@/components/model-viewer"
 import type { ModelStatus } from "@/lib/supabase/types"
 
-interface PhotoPreviewProps {
+interface ModelPreviewProps {
   photoSet: PhotoSet
   onUpload: (file: File | UploadItem, position: keyof PhotoSet) => void
   onRemove: (position: keyof PhotoSet) => void
@@ -41,51 +41,13 @@ const errorMessages: Record<string, string> = {
   'bgr_removal_failed': 'Failed to remove background',
   'job_creation_failed': 'Failed to create job',
   'model_generation_failed': 'Failed to generate 3D model',
-  'model_saving_failed': 'Failed to save model'
+  'model_saving_failed': 'Failed to save 3D model'
 }
 
 // We removed getImageSrc and now use persistentUrl or blobUrl directly
 
-// Helper function to get expiration time for UploadItem
-const getExpirationTime = (item: UploadItem): Date | undefined => {
-  return undefined; // Files don't have expiration
-}
 
-// Component for showing expiration countdown
-const ExpirationBadge = ({ expiresAt }: { expiresAt: Date }) => {
-  const [timeLeft, setTimeLeft] = useState<string>('')
-
-  useEffect(() => {
-    const updateTimer = () => {
-      const now = new Date()
-      const diff = expiresAt.getTime() - now.getTime()
-      
-      if (diff <= 0) {
-        setTimeLeft('Expired')
-        return
-      }
-      
-      const hours = Math.floor(diff / (1000 * 60 * 60))
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000)
-      
-      setTimeLeft(`${hours}h ${minutes}m ${seconds}s`)
-    }
-
-    updateTimer()
-    const interval = setInterval(updateTimer, 1000)
-    return () => clearInterval(interval)
-  }, [expiresAt])
-
-  return (
-    <div className="absolute top-2 left-2 bg-yellow-500 text-white text-xs px-2 py-1 rounded-md flex items-center">
-      <span className="mr-1">⏳</span>
-      <span>{timeLeft}</span>
-    </div>
-  )
-}
-
-export function PhotoPreview({
+export function ModelPreview({
   photoSet,
   onUpload,
   onRemove,
@@ -97,7 +59,7 @@ export function PhotoPreview({
   modelUrl,
   selectedModel,
   errorMessage,
-}: PhotoPreviewProps) {
+}: ModelPreviewProps) {
   const [dragOver, setDragOver] = useState<keyof PhotoSet | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [draftLoading, setDraftLoading] = useState<Record<keyof PhotoSet, boolean>>({
@@ -179,8 +141,6 @@ const currentStageIndex = processingStage ? stages.findIndex((s) => s.key === pr
         {positions.map(({ key, label, required }) => {
           const photo = photoSet[key]
           const isDragOver = dragOver === key
-          const expiration = photo ? getExpirationTime(photo) : undefined
-          const isTemporary = expiration !== undefined
           const isLoadingPosition = draftLoading[key]
 
           return (
@@ -234,17 +194,6 @@ const currentStageIndex = processingStage ? stages.findIndex((s) => s.key === pr
                       className="w-full h-full object-cover rounded-lg"
                     />
                     
-                    {/* Expiration badge for temporary items */}
-                    {isTemporary && expiration && (
-                      <ExpirationBadge expiresAt={expiration} />
-                    )}
-                    
-                    {/* Temporary item badge */}
-                    {isTemporary && (
-                      <div className="absolute top-2 right-2 bg-yellow-500 text-white text-xs px-2 py-1 rounded-md">
-                        Temporary
-                      </div>
-                    )}
                     
                     {/* Loading spinner */}
                     {isLoadingPosition && (

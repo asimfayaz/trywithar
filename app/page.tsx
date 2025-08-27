@@ -7,7 +7,7 @@ import { AuthModal } from "@/components/auth-modal"
 import { supabase } from "@/lib/supabase"
 import type { AuthUser } from "@/lib/supabase"
 import { UserDashboard } from "@/components/user-dashboard"
-import { PhotoPreview } from "@/components/photo-preview"
+import { ModelPreview } from "@/components/model-preview"
 
 import { userService } from "@/lib/supabase"
 import { ModelService } from "@/lib/supabase/model.service"
@@ -962,8 +962,8 @@ const updatedModel: ModelData = {
           <div className="flex-1 min-h-0 flex flex-col">
 {selectedModel ? (
   <div className="flex-1 min-h-0">
-    <PhotoPreview
-      photoSet={currentPhotoSet}
+      <ModelPreview
+        photoSet={currentPhotoSet}
       processingStage={selectedModel.processingStage}
       modelUrl={selectedModel.modelUrl}
       selectedModel={selectedModel}

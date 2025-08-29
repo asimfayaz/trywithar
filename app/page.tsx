@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ImageGallery } from "@/components/image-gallery"
+import { ModelGallery } from "@/components/model-gallery"
 import { FileUpload } from "@/components/file-upload"
 import { AuthModal } from "@/components/auth-modal"
 import { supabase } from "@/lib/supabase"
@@ -975,7 +975,7 @@ const updatedModel: ModelData = {
           {/* Model Gallery */}
           <div className="grid row-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex-1 min-h-0">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Your 3D Models</h2>
-            <ImageGallery models={models} onSelectModel={handleSelectModel} selectedModelId={selectedModel?.id} />
+            <ModelGallery models={models} onSelectModel={handleSelectModel} selectedModelId={selectedModel?.id} />
           </div>
         </div>
 

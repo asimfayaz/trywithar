@@ -3,13 +3,13 @@
 import { cn } from "@/lib/utils"
 import type { ModelData } from "@/app/page"
 
-interface ImageGalleryProps {
+interface ModelGalleryProps {
   models: ModelData[]
   onSelectModel: (model: ModelData) => void
   selectedModelId?: string
 }
 
-export function ImageGallery({ models, onSelectModel, selectedModelId }: ImageGalleryProps) {
+export function ModelGallery({ models, onSelectModel, selectedModelId }: ModelGalleryProps) {
   const handleRefresh = () => {
     // This will trigger a parent component refresh
     if (typeof window !== 'undefined') {

@@ -7,6 +7,7 @@ import { AuthModal } from "@/components/auth-modal"
 import { supabase } from "@/lib/supabase"
 import type { AuthUser } from "@/lib/supabase"
 import { UserDashboard } from "@/components/user-dashboard"
+import { ModelGenerator } from "@/components/model-generator"
 import { ModelPreview } from "@/components/model-preview"
 
 import { userService } from "@/lib/supabase"
@@ -962,25 +963,27 @@ const updatedModel: ModelData = {
           <div className="flex-1 min-h-0 flex flex-col">
 {selectedModel ? (
   <div className="flex-1 min-h-0">
-      <ModelPreview
+    {selectedModel?.status === 'completed' && selectedModel.modelUrl ? (
+      <ModelPreview modelUrl={selectedModel.modelUrl} photoSet={currentPhotoSet} />
+    ) : (
+      <ModelGenerator
         photoSet={currentPhotoSet}
-      processingStage={selectedModel.processingStage}
-      modelUrl={selectedModel.modelUrl}
-      selectedModel={selectedModel}
-      onUpload={(fileOrItem, position) => {
-        if (fileOrItem instanceof File) {
-          handleUpload(fileOrItem, position);
-        } else {
-          handleUpload(fileOrItem.file, position);
-        }
-      }}
-      onRemove={(position) => handleRemovePhoto(position)}
-      disabled={photoControlsDisabled}
-      onGenerate={handleGenerateModel}
-      canGenerate={canGenerate}
-      isGenerating={isGenerating}
-      errorMessage={selectedModel.status === "failed" ? selectedModel.error : undefined}
-    />
+        onUpload={(fileOrItem: File | UploadItem, position: keyof PhotoSet) => {
+          if (fileOrItem instanceof File) {
+            handleUpload(fileOrItem, position);
+          } else {
+            handleUpload(fileOrItem.file, position);
+          }
+        }}
+        onRemove={(position: keyof PhotoSet) => handleRemovePhoto(position)}
+        onGenerate={handleGenerateModel}
+        canGenerate={canGenerate}
+        isGenerating={isGenerating}
+        processingStage={selectedModel.processingStage}
+        selectedModel={selectedModel}
+        errorMessage={selectedModel.status === "failed" ? selectedModel.error : undefined}
+      />
+    )}
   </div>
 ) : (
               <div className="flex flex-col items-center justify-center flex-1 text-gray-500">

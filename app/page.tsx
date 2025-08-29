@@ -55,6 +55,29 @@ export interface User {
   credits?: number
 }
 
+const Logo = () => (
+  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white">
+    <svg 
+      width="24" 
+      height="24" 
+      viewBox="0 0 64 64" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="4" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    >
+      <path d="M16 8h-4a8 8 0 0 0-8 8v4" />
+      <path d="M48 8h4a8 8 0 0 1 8 8v4" />
+      <path d="M16 56h-4a8 8 0 0 1-8-8v-4" />
+      <path d="M48 56h4a8 8 0 0 0 8-8v-4" />
+      <polygon points="32,16 48,25 48,41 32,50 16,41 16,25" />
+      <polyline points="32,50 32,34 48,25" />
+      <polyline points="32,34 16,25" />
+    </svg>
+  </div>
+);
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null)
   const [showAuthModal, setShowAuthModal] = useState(false)
@@ -932,7 +955,9 @@ const updatedModel: ModelData = {
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">Try with AR</h1>
+          <div className="flex items-center">
+            <Logo /><h1 className="text-2xl font-bold text-gray-900 ml-3">Try with AR</h1>
+          </div>
           <UserDashboard user={user} onLogin={() => setShowAuthModal(true)} onLogout={handleLogout} />
         </div>
       </header>
@@ -989,17 +1014,18 @@ const updatedModel: ModelData = {
               <div className="flex flex-col items-center justify-center flex-1 text-gray-500">
                 <div className="text-center">
                   <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                      />
+                    <svg className="w-8 h-8" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M16 8h-4a8 8 0 0 0-8 8v4" />
+                      <path d="M48 8h4a8 8 0 0 1 8 8v4" />
+                      <path d="M16 56h-4a8 8 0 0 1-8-8v-4" />
+                      <path d="M48 56h4a8 8 0 0 0 8-8v-4" />
+                      <polygon points="32,16 48,25 48,41 32,50 16,41 16,25" />
+                      <polyline points="32,50 32,34 48,25" />
+                      <polyline points="32,34 16,25" />
                     </svg>
                   </div>
-                  <h3 className="text-lg font-medium mb-2">No Photos Selected</h3>
-                  <p className="text-sm">Upload or select photos to get started with 3D model generation</p>
+                  <h3 className="text-lg font-medium mb-2">No Model Selected</h3>
+                  <p className="text-sm">Upload a photo to generate a 3D model, or select a model from the gallery</p>
                 </div>
               </div>
             )}

@@ -54,9 +54,7 @@ export function MobileNavigationHeader({ currentView, onBack, user, onLogin, onL
                 onClick={onBack || navigateToGallery}
                 className="h-8 w-8"
               >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
+                <span className="text-lg">←</span>
               </Button>
             )}
             <h2 className="text-lg font-semibold text-gray-900">{getTitle()}</h2>

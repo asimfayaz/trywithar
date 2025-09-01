@@ -249,7 +249,15 @@ export function MobileHomeContent() {
       <div className="p-4">
         {currentView === 'gallery' && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Your 3D Models</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">Your 3D Models</h2>
+              <button
+                onClick={navigateToUpload}
+                className="text-blue-500 hover:text-blue-700 text-sm font-medium"
+              >
+                + Add Model
+              </button>
+            </div>
             <ModelGallery 
               models={models} 
               onSelectModel={handleSelectModel} 

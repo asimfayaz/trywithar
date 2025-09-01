@@ -21,7 +21,7 @@ interface UserDashboardProps {
 export function UserDashboard({ user, onLogin, onLogout }: UserDashboardProps) {
   if (!user) {
     return (
-      <Button onClick={onLogin} variant="default">
+      <Button onClick={() => onLogin()} variant="default">
         Sign In
       </Button>
     )

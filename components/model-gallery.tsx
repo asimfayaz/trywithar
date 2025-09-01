@@ -2,20 +2,69 @@
 
 import { cn } from "@/lib/utils"
 import type { ModelData } from "@/app/page"
+import { useNavigation } from "@/contexts/NavigationContext"
 
 interface ModelGalleryProps {
   models: ModelData[]
   onSelectModel: (model: ModelData) => void
   selectedModelId?: string
+  onNavigateToUpload?: () => void
+  onNavigateBack?: () => void
+  isFullView?: boolean
+  isLoading?: boolean
+  error?: string | null
 }
 
-export function ModelGallery({ models, onSelectModel, selectedModelId }: ModelGalleryProps) {
+export function ModelGallery({ models, onSelectModel, selectedModelId, onNavigateToUpload, isLoading, error }: ModelGalleryProps) {
   const handleRefresh = () => {
     // This will trigger a parent component refresh
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('refreshModels'));
     }
   };
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-gray-500">
+        <div className="w-12 h-12 mx-auto mb-3 bg-red-100 rounded-full flex items-center justify-center">
+          <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+        </div>
+        <p className="text-sm text-center text-red-600">Failed to load models</p>
+        <p className="text-xs text-center mt-1">{error}</p>
+        <button 
+          onClick={handleRefresh}
+          className="mt-3 text-blue-500 hover:text-blue-700 text-sm font-medium"
+        >
+          Try Again
+        </button>
+      </div>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-gray-500">
+        <div className="w-12 h-12 mx-auto mb-3 bg-gray-100 rounded-full flex items-center justify-center">
+          <svg className="w-6 h-6 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
+          </svg>
+        </div>
+        <p className="text-sm text-center">Loading your models...</p>
+      </div>
+    )
+  }
 
   if (models.length === 0) {
     return (
@@ -31,28 +80,20 @@ export function ModelGallery({ models, onSelectModel, selectedModelId }: ModelGa
           </svg>
         </div>
         <p className="text-sm text-center">No photos yet. Upload photos to get started!</p>
+        {onNavigateToUpload && (
+          <button 
+            onClick={onNavigateToUpload}
+            className="mt-3 text-blue-500 hover:text-blue-700 text-sm font-medium"
+          >
+            + Add Model
+          </button>
+        )}
       </div>
     )
   }
 
   return (
     <div className="overflow-y-auto -mr-2 pr-2 h-full max-h-full flex flex-col">
-      <div className="flex justify-end mb-2">
-        <button 
-          onClick={handleRefresh}
-          className="flex items-center text-sm text-gray-500 hover:text-gray-700"
-        >
-          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
-          </svg>
-          Refresh
-        </button>
-      </div>
       <div className="grid grid-cols-2 gap-3 flex-1">
         {models.map((model) => (
           <div

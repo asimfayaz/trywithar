@@ -31,7 +31,7 @@ export function AuthModal({ isOpen, onClose, onLogin, reason, initialForgotPassw
   
   // Check if reason indicates we should show the forgot password form
   useEffect(() => {
-    if ((reason && reason.includes("expired") && reason.includes("reset")) || initialForgotPassword) {
+    if ((typeof reason === 'string' && reason.includes("expired") && reason.includes("reset")) || initialForgotPassword) {
       setShowForgotPassword(true);
     }
   }, [reason, initialForgotPassword]);

@@ -17,6 +17,8 @@ interface ModelGeneratorProps {
   processingStage?: ModelStatus
   selectedModel?: any
   errorMessage?: string
+  onNavigateBack?: () => void
+  isFullView?: boolean
 }
 
 const positions = [

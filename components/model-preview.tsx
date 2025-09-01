@@ -7,6 +7,8 @@ import { ModelViewer } from "@/components/model-viewer"
 interface ModelPreviewProps {
   modelUrl: string
   photoSet: PhotoSet
+  onNavigateBack?: () => void
+  isFullView?: boolean
 }
 
 const positions = [

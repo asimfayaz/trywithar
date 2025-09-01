@@ -4,13 +4,15 @@ import { useState, useEffect } from "react"
 import { ModelGallery } from "@/components/model-gallery"
 import { FileUpload } from "@/components/file-upload"
 import { AuthModal } from "@/components/auth-modal"
-import { supabase } from "@/lib/supabase"
-import type { AuthUser } from "@/lib/supabase"
 import { UserDashboard } from "@/components/user-dashboard"
 import { ModelGenerator } from "@/components/model-generator"
 import { ModelPreview } from "@/components/model-preview"
+import { NavigationProvider, useNavigation } from "@/contexts/NavigationContext"
+import { MobileHomeContent } from "@/components/mobile-home-content"
+import { useIsMobile } from "@/components/ui/use-mobile"
+import { Logo } from "@/components/logo"
+import { useAuth } from "@/contexts/AuthContext"
 
-import { userService } from "@/lib/supabase"
 import { ModelService } from "@/lib/supabase/model.service"
 import { StorageService } from "@/lib/storage.service"
 import type { ModelStatus } from "@/lib/supabase/types"
@@ -55,33 +57,19 @@ export interface User {
   credits?: number
 }
 
-const Logo = () => (
-  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white">
-    <svg 
-      width="24" 
-      height="24" 
-      viewBox="0 0 64 64" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="4" 
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-    >
-      <path d="M16 8h-4a8 8 0 0 0-8 8v4" />
-      <path d="M48 8h4a8 8 0 0 1 8 8v4" />
-      <path d="M16 56h-4a8 8 0 0 1-8-8v-4" />
-      <path d="M48 56h4a8 8 0 0 0 8-8v-4" />
-      <polygon points="32,16 48,25 48,41 32,50 16,41 16,25" />
-      <polyline points="32,50 32,34 48,25" />
-      <polyline points="32,34 16,25" />
-    </svg>
-  </div>
-);
-
 export default function Home() {
-  const [user, setUser] = useState<User | null>(null)
-  const [showAuthModal, setShowAuthModal] = useState(false)
-  const [authReason, setAuthReason] = useState<string | null>(null)
+  const { 
+    user, 
+    showAuthModal, 
+    authReason, 
+    showForgotPassword,
+    login, 
+    logout, 
+    openAuthModal, 
+    closeAuthModal,
+    setShowForgotPassword
+  } = useAuth();
+  
   const [selectedModel, setSelectedModel] = useState<ModelData | null>(null)
   const [currentPhotoSet, setCurrentPhotoSet] = useState<PhotoSet>({})
   const [isGenerating, setIsGenerating] = useState(false)
@@ -90,9 +78,6 @@ export default function Home() {
   // Create model service instance
   const modelService = new ModelService();
 
-  // State to track if we should show the forgot password form
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
-
   // Check URL parameters for auth modal triggers
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -100,7 +85,7 @@ export default function Home() {
     const authMode = urlParams.get('authMode');
     
     if (showAuth === 'true') {
-      setShowAuthModal(true);
+      openAuthModal();
       
       if (authMode === 'forgotPassword') {
         setShowForgotPassword(true);
@@ -112,85 +97,6 @@ export default function Home() {
       window.history.replaceState({}, document.title, newUrl);
     }
   }, []);
-
-  // Check for existing authentication session on app load
-  useEffect(() => {
-    let isInitialized = false
-    
-    const initializeAuth = async () => {
-      try {
-        const { data } = await supabase.auth.getUser();
-        const currentUser = data.user;
-        
-        if (currentUser && !isInitialized) {
-          const fullUser = await userService.getUserById(currentUser.id);
-          
-          setUser({
-            id: fullUser.id,
-            name: fullUser.name || currentUser.email || "User",
-            email: fullUser.email || "",
-            avatar_url: fullUser.avatar_url || currentUser.user_metadata?.avatar_url || "/placeholder.svg?height=40&width=40",
-            credits: fullUser.credits || 0,
-          })
-        }
-      } catch (error) {
-        console.error('❌ Failed to initialize auth:', error)
-      } finally {
-        if (!isInitialized) {
-          setIsLoading(false)
-          isInitialized = true
-        }
-      }
-    }
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (isInitialized) {
-        const authUser = session?.user
-        
-        if (authUser) {
-          setUser(prev => {
-            if (!prev) {
-              userService.getUserById(authUser.id).then(fullUser => {
-                setUser({
-                  id: fullUser.id,
-                  name: fullUser.name || authUser.email || "User",
-                  email: fullUser.email || "",
-                  avatar_url: fullUser.avatar_url || authUser.user_metadata?.avatar_url || "/placeholder.svg?height=40&width=40",
-                  credits: fullUser.credits || 0,
-                })
-              }).catch(error => {
-                console.error('Failed to load user data in listener:', error)
-              });
-              
-              return {
-                id: authUser.id,
-                name: authUser.user_metadata?.name || authUser.email || "User",
-                email: authUser.email || "",
-                avatar_url: authUser.user_metadata?.avatar_url || "/placeholder.svg?height=40&width=40",
-                credits: 0,
-              }
-            }
-            
-            return {
-              ...prev,
-              id: authUser.id,
-              name: authUser.user_metadata?.name || authUser.email || "User",
-              email: authUser.email || "",
-              avatar_url: authUser.user_metadata?.avatar_url || "/placeholder.svg?height=40&width=40",
-            }
-          })
-        } else {
-          setUser(null)
-        }
-      }
-    })
-
-    initializeAuth()
-
-    return () => {
-      subscription?.unsubscribe()
-    }
-  }, [])
   
   const [models, setModels] = useState<ModelData[]>([])
 
@@ -257,25 +163,15 @@ return {
   }, [user])
 
   // Real user authentication
-  const handleLogin = (user: AuthUser) => {
-    setUser({
-      id: user.id,
-      name: user.name || user.email?.split('@')[0] || "User",
-      email: user.email || "",
-      avatar_url: user.avatar_url || "/placeholder.svg?height=40&width=40",
-      credits: user.credits || 0,
-    })
-    setShowAuthModal(false)
-    setAuthReason(null)
+  const handleLogin = (user: any) => {
+    login(user);
   }
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut()
-      setUser(null)
+      await logout();
     } catch (error) {
       console.error('Logout error:', error)
-      setUser(null)
     }
     setSelectedModel(null)
     setCurrentPhotoSet({})
@@ -284,8 +180,7 @@ return {
 
   const handleUpload = async (file: File, position: keyof PhotoSet = "front") => {
     if (!user) {
-      setAuthReason("You need to sign in to upload photos");
-      setShowAuthModal(true);
+      openAuthModal("You need to sign in to upload photos");
       return;
     }
 
@@ -428,8 +323,7 @@ const previewModel: ModelData = {
 
   const handleGenerateModel = async () => {
     if (!user) {
-      setAuthReason("Please sign in to generate 3D models.");
-      setShowAuthModal(true);
+      openAuthModal("Please sign in to generate 3D models.");
       return;
     }
 
@@ -852,21 +746,11 @@ const updatedModel: ModelData = {
   useEffect(() => {
     if (!user) return;
 
-    const channel = supabase
-      .channel('models-updates')
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'models',
-        filter: `user_id=eq.${user.id}`
-      }, (payload) => {
-        // Refresh models list when any model is updated
-        loadUserPhotos();
-      })
-      .subscribe();
+    // TODO: Implement real-time updates using AuthContext
+    // This will be handled by the AuthContext or a separate service
 
     return () => {
-      supabase.removeChannel(channel);
+      // Cleanup real-time subscription
     };
   }, [user]);
 
@@ -918,20 +802,8 @@ const updatedModel: ModelData = {
   
   // Function to refresh user credit data
   const refreshUserCredits = async () => {
-    if (!user) return;
-    
-    try {
-      const updatedUser = await userService.getUserById(user.id);
-      setUser({
-        id: updatedUser.id,
-        name: updatedUser.name || user.name,
-        email: updatedUser.email,
-        avatar_url: updatedUser.avatar_url || user.avatar_url,
-        credits: updatedUser.credits
-      });
-    } catch (error) {
-      console.error('Failed to refresh credits:', error);
-    }
+    // This will be handled by the AuthContext
+    // TODO: Implement credit refresh in AuthContext
   };
 
   // Refresh credits on initial load
@@ -942,105 +814,117 @@ const updatedModel: ModelData = {
   }, []);
 
   const handleCloseAuthModal = () => {
-    setShowAuthModal(false)
-    setAuthReason(null)
+    closeAuthModal();
   }
 
   const hasPhotos = Object.keys(currentPhotoSet).length > 0
   const photoControlsDisabled = selectedModel?.status === "processing" || selectedModel?.status === "completed" || selectedModel?.status === "failed";
   const canGenerate = currentPhotoSet.front && !isGenerating && selectedModel?.status !== "processing" && selectedModel?.status !== "failed";
 
+  const isMobile = useIsMobile();
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <Logo /><h1 className="text-2xl font-bold text-gray-900 ml-3">Try with AR</h1>
-          </div>
-          <UserDashboard user={user} onLogin={() => setShowAuthModal(true)} onLogout={handleLogout} />
-        </div>
-      </header>
-
-      {/* Main Grid Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6 h-[calc(100vh-88px)]">
-        {/* Left Column - Gallery and Upload */}
-        <div className="lg:col-span-1 space-y-4 flex flex-col min-h-0">
-          {/* Upload Section */}
-          <div className="grid row-span-1 bg-white rounded-lg shadow-sm border border-gray-200 p-6 h-fit">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Upload Photos</h2>
-            <FileUpload onUpload={(file: File) => handleUpload(file, "front")} disabled={false} />
-          </div>
-
-          {/* Model Gallery */}
-          <div className="grid row-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex-1 min-h-0">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Your 3D Models</h2>
-            <ModelGallery models={models} onSelectModel={handleSelectModel} selectedModelId={selectedModel?.id} />
-          </div>
-        </div>
-
-        {/* Right Column - Model Viewer */}
-        <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex flex-col">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">3D Model</h2>
-          </div>
-
-          <div className="flex-1 min-h-0 flex flex-col">
-{selectedModel ? (
-  <div className="flex-1 min-h-0">
-    {selectedModel?.status === 'completed' && selectedModel.modelUrl ? (
-      <ModelPreview modelUrl={selectedModel.modelUrl} photoSet={currentPhotoSet} />
-    ) : (
-      <ModelGenerator
-        photoSet={currentPhotoSet}
-        onUpload={(fileOrItem: File | UploadItem, position: keyof PhotoSet) => {
-          if (fileOrItem instanceof File) {
-            handleUpload(fileOrItem, position);
-          } else {
-            handleUpload(fileOrItem.file, position);
-          }
-        }}
-        onRemove={(position: keyof PhotoSet) => handleRemovePhoto(position)}
-        onGenerate={handleGenerateModel}
-        canGenerate={canGenerate}
-        isGenerating={isGenerating}
-        processingStage={selectedModel.processingStage}
-        selectedModel={selectedModel}
-        errorMessage={selectedModel.status === "failed" ? selectedModel.error : undefined}
-      />
-    )}
-  </div>
-) : (
-              <div className="flex flex-col items-center justify-center flex-1 text-gray-500">
-                <div className="text-center">
-                  <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                    <svg className="w-8 h-8" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M16 8h-4a8 8 0 0 0-8 8v4" />
-                      <path d="M48 8h4a8 8 0 0 1 8 8v4" />
-                      <path d="M16 56h-4a8 8 0 0 1-8-8v-4" />
-                      <path d="M48 56h4a8 8 0 0 0 8-8v-4" />
-                      <polygon points="32,16 48,25 48,41 32,50 16,41 16,25" />
-                      <polyline points="32,50 32,34 48,25" />
-                      <polyline points="32,34 16,25" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-medium mb-2">No Model Selected</h3>
-                  <p className="text-sm">Upload a photo to generate a 3D model, or select a model from the gallery</p>
-                </div>
+    <NavigationProvider>
+      {isMobile ? (
+        <MobileHomeContent />
+      ) : (
+        <div className="min-h-screen bg-gray-50">
+          {/* Header */}
+          <header className="bg-white border-b border-gray-200 px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Logo /><h1 className="text-2xl font-bold text-gray-900 ml-3">Try with AR</h1>
               </div>
-            )}
-          </div>
-        </div>
-      </div>
+              <UserDashboard user={user} onLogin={() => openAuthModal("Please sign in to continue")} onLogout={handleLogout} />
+            </div>
+          </header>
 
-      {/* Auth Modal */}
-      <AuthModal 
-        isOpen={showAuthModal} 
-        onClose={handleCloseAuthModal} 
-        onLogin={handleLogin} 
-        reason={authReason}
-        initialForgotPassword={showForgotPassword}
-      />
-    </div>
+          {/* Main Grid Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6 h-[calc(100vh-88px)]">
+            {/* Left Column - Gallery and Upload */}
+            <div className="lg:col-span-1 space-y-4 flex flex-col min-h-0">
+              {/* Upload Section */}
+              <div className="grid row-span-1 bg-white rounded-lg shadow-sm border border-gray-200 p-6 h-fit">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Upload Photos</h2>
+                <FileUpload onUpload={(file: File) => handleUpload(file, "front")} disabled={false} />
+              </div>
+
+              {/* Model Gallery */}
+              <div className="grid row-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex-1 min-h-0">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Your 3D Models</h2>
+                <ModelGallery 
+                  models={models} 
+                  onSelectModel={handleSelectModel} 
+                  selectedModelId={selectedModel?.id}
+                  onNavigateToUpload={() => {}} 
+                />
+              </div>
+            </div>
+
+            {/* Right Column - Model Viewer */}
+            <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900">3D Model</h2>
+              </div>
+
+              <div className="flex-1 min-h-0 flex flex-col">
+                {selectedModel ? (
+                  <div className="flex-1 min-h-0">
+                    {selectedModel?.status === 'completed' && selectedModel.modelUrl ? (
+                      <ModelPreview modelUrl={selectedModel.modelUrl} photoSet={currentPhotoSet} />
+                    ) : (
+                      <ModelGenerator
+                        photoSet={currentPhotoSet}
+                        onUpload={(fileOrItem: File | UploadItem, position: keyof PhotoSet) => {
+                          if (fileOrItem instanceof File) {
+                            handleUpload(fileOrItem, position);
+                          } else {
+                            handleUpload(fileOrItem.file, position);
+                          }
+                        }}
+                        onRemove={(position: keyof PhotoSet) => handleRemovePhoto(position)}
+                        onGenerate={handleGenerateModel}
+                        canGenerate={canGenerate}
+                        isGenerating={isGenerating}
+                        processingStage={selectedModel.processingStage}
+                        selectedModel={selectedModel}
+                        errorMessage={selectedModel.status === "failed" ? selectedModel.error : undefined}
+                      />
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center flex-1 text-gray-500">
+                    <div className="text-center">
+                      <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                        <svg className="w-8 h-8" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M16 8h-4a8 8 0 0 0-8 8v4" />
+                          <path d="M48 8h4a8 8 0 0 1 8 8v4" />
+                          <path d="M16 56h-4a8 8 0 0 1-8-8v-4" />
+                          <path d="M48 56h4a8 8 0 0 0 8-8v-4" />
+                          <polygon points="32,16 48,25 48,41 32,50 16,41 16,25" />
+                          <polyline points="32,50 32,34 48,25" />
+                          <polyline points="32,34 16,25" />
+                        </svg>
+                      </div>
+                      <h3 className="text-lg font-medium mb-2">No Model Selected</h3>
+                      <p className="text-sm">Upload a photo to generate a 3D model, or select a model from the gallery</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Auth Modal */}
+          <AuthModal 
+            isOpen={showAuthModal} 
+            onClose={handleCloseAuthModal} 
+            onLogin={handleLogin} 
+            reason={authReason}
+            initialForgotPassword={showForgotPassword}
+          />
+        </div>
+      )}
+    </NavigationProvider>
   )
 }

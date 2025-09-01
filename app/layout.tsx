@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import "./globals.css"
 import { JobPollingProvider } from "@/components/job-polling-provider"
 import { Toaster } from "@/components/ui/sonner"
+import { AuthProvider } from "@/contexts/AuthContext"
 
 export const metadata: Metadata = {
   title: "Try with AR",
@@ -24,9 +25,11 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans antialiased">
-        {children}
-        <JobPollingProvider />
-        <Toaster position="top-center" richColors />
+        <AuthProvider>
+          {children}
+          <JobPollingProvider />
+          <Toaster position="top-center" richColors />
+        </AuthProvider>
       </body>
     </html>
   )

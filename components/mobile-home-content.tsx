@@ -275,12 +275,6 @@ export function MobileHomeContent() {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900">Upload Photos</h2>
-              <button
-                onClick={navigateToGallery}
-                className="text-blue-500 hover:text-blue-700 text-sm font-medium"
-              >
-                ← Back to Gallery
-              </button>
             </div>
             <FileUpload onUpload={(file: File) => handleUpload(file, "front")} disabled={false} />
           </div>

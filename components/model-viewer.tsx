@@ -69,6 +69,13 @@ export function ModelViewer({ modelUrl, poster = "/placeholder.svg" }: ModelView
 
   useEffect(() => {
     const checkModelUrl = async () => {
+      // Skip verification in development to avoid CORS issues on mobile
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Skipping model URL verification in development mode')
+        setIsLoading(false)
+        return
+      }
+
       try {
         const response = await fetch(modelUrl, { method: 'HEAD' })
         if (!response.ok) {
@@ -113,6 +120,7 @@ export function ModelViewer({ modelUrl, poster = "/placeholder.svg" }: ModelView
       <div className="w-full h-96 rounded-lg overflow-hidden bg-gray-100">
 {/* @ts-ignore */}
 <model-viewer
+  crossOrigin="anonymous"
   src={modelUrl}
   alt="Generated 3D model"
   camera-controls

@@ -70,8 +70,8 @@ export async function uploadOriginalImageToR2(
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Upload original image failed: ${response.statusText}`);
+    const errorData = await response.json().catch(() => ({ message: response.statusText }));
+    throw new Error(`Upload original image failed: ${errorData.message || response.statusText}`);
   }
 
   const result = await response.json();
@@ -92,8 +92,8 @@ export async function uploadProcessedImageToR2(
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Upload processed image failed: ${response.statusText}`);
+    const errorData = await response.json().catch(() => ({ message: response.statusText }));
+    throw new Error(`Upload processed image failed: ${errorData.message || response.statusText}`);
   }
 
   const result = await response.json();

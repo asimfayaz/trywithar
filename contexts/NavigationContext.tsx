@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react'
+import React, { createContext, useContext, useState, useEffect } from 'react'
 
 export type ViewState = 'gallery' | 'upload' | 'generator' | 'preview'
 
@@ -23,6 +23,19 @@ export const useNavigation = () => {
 
 export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentView, setCurrentView] = useState<ViewState>('gallery')
+  
+  // Load saved view from localStorage on mount
+  useEffect(() => {
+    const savedView = localStorage.getItem('mobileCurrentView')
+    if (savedView && ['gallery', 'upload', 'generator', 'preview'].includes(savedView)) {
+      setCurrentView(savedView as ViewState)
+    }
+  }, [])
+
+  // Save view to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('mobileCurrentView', currentView)
+  }, [currentView])
   
   const navigateToGallery = () => setCurrentView('gallery')
   const navigateToUpload = () => setCurrentView('upload')

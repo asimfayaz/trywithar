@@ -15,6 +15,7 @@ interface AuthContextType {
   openAuthModal: (reason?: string) => void
   closeAuthModal: () => void
   setShowForgotPassword: (show: boolean) => void
+  updateUser: (user: User) => void
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -26,7 +27,8 @@ const AuthContext = createContext<AuthContextType>({
   logout: async () => {},
   openAuthModal: () => {},
   closeAuthModal: () => {},
-  setShowForgotPassword: () => {}
+  setShowForgotPassword: () => {},
+  updateUser: () => {}
 })
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -141,6 +143,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setShowForgotPassword(false)
   }
 
+  const updateUser = (newUser: User) => {
+    setUser(newUser);
+  };
+
   return (
     <AuthContext.Provider value={{ 
       user, 
@@ -151,7 +157,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout, 
       openAuthModal, 
       closeAuthModal,
-      setShowForgotPassword
+      setShowForgotPassword,
+      updateUser
     }}>
       {children}
     </AuthContext.Provider>

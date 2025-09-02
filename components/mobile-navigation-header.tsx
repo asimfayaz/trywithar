@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button"
 import { useNavigation } from "@/contexts/NavigationContext"
 import { Logo } from "@/components/logo"
 import { UserDashboard } from "@/components/user-dashboard"
-import { Badge } from "@/components/ui/badge"
 import type { User } from "@/app/page"
 
 interface MobileNavigationHeaderProps {
@@ -62,9 +61,8 @@ export function MobileNavigationHeader({ currentView, onBack, user, onLogin, onL
         )}
       </div>
       
-      {/* Right side - Credits + User Dashboard */}
+      {/* Right side - User Dashboard */}
       <div className="flex items-center space-x-2">
-
         {/* Existing UserDashboard */}
         <UserDashboard user={user} onLogin={onLogin} onLogout={onLogout} />
       </div>

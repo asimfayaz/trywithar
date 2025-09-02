@@ -16,8 +16,19 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
+    // Validate file type - allow common image formats including HEIC
+    const allowedTypes = [
+      'image/',
+      'image/heic',
+      'image/heif'
+    ];
+    
+    const isAllowedType = allowedTypes.some(type => 
+      file.type.startsWith(type) || 
+      file.type === 'application/octet-stream' // Some browsers send this for HEIC
+    );
+    
+    if (!isAllowedType) {
       return NextResponse.json(
         { status: 'error', message: 'Only image files are allowed' },
         { status: 400 }

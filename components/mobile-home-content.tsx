@@ -10,8 +10,9 @@ import { useNavigation } from "@/contexts/NavigationContext"
 import { useIsMobile } from "@/components/ui/use-mobile"
 import { useAuth } from "@/contexts/AuthContext"
 import { AuthModal } from "@/components/auth-modal"
-import { ModelService } from "@/lib/supabase/model.service"
 import { StorageService } from "@/lib/storage.service"
+import { useModelGeneration } from "@/hooks/useModelGeneration"
+import { ModelService } from "@/lib/supabase/model.service"
 import type { ModelStatus } from "@/lib/supabase/types"
 import type { UploadItem, PhotoSet, ModelData } from "@/app/page"
 
@@ -37,6 +38,7 @@ export function MobileHomeContent() {
   const [models, setModels] = useState<ModelData[]>([])
   const [error, setError] = useState<string | null>(null)
   
+  const { generateModel, retryModelGeneration, pollJobStatus } = useModelGeneration();
   const modelService = new ModelService();
 
   // Add a new useEffect for initial mount:
@@ -44,10 +46,6 @@ export function MobileHomeContent() {
     navigateToGallery(); // Set initial view to gallery
   }, []);
 
-  // Reset to gallery view when user logs in/out
-  useEffect(() => {
-    navigateToGallery(); // Always reset to gallery when user changes
-  }, [user]);
 
   // Load user photos
   const loadUserPhotos = async () => {
@@ -241,6 +239,15 @@ export function MobileHomeContent() {
       {/* Mobile Navigation Header */}
       <MobileNavigationHeader 
         currentView={currentView} 
+        onBack={() => {
+          if (currentView === 'upload') {
+            navigateToGallery();
+          } else if (currentView === 'generator') {
+            navigateToGallery();
+          } else if (currentView === 'preview') {
+            navigateToGallery();
+          }
+        }}
         user={user}
         onLogin={() => openAuthModal("Please sign in to continue")}
         onLogout={async () => {
@@ -307,7 +314,110 @@ export function MobileHomeContent() {
               }}
               onRemove={() => {}}
               onGenerate={async () => {
-                // Handle generation logic here
+                if (!selectedModel || !user) return;
+                
+                try {
+                  if (!user) {
+                    throw new Error("User not authenticated");
+                  }
+                  
+                  setIsGenerating(true);
+                  
+                  // Check if this is a retry for a failed model
+                  let result;
+                  if (selectedModel.status === "failed" && selectedModel.id) {
+                    // Use retry function for failed models
+                    result = await retryModelGeneration(selectedModel.id, user.id);
+                  } else {
+                    // Use regular generate function for new models
+                    result = await generateModel(selectedModel.id, currentPhotoSet, user.id);
+                  }
+                  
+                  // Navigate to generator view to show processing status
+                  navigateToGenerator();
+                  
+                  // Start polling for job status
+                  const storage = new StorageService();
+                  
+                  // Clean up temporary models
+                  if (selectedModel.isTemporary) {
+                    await storage.deleteDraft(selectedModel.id);
+                  }
+                  
+                  // Update the selected model with the job ID and processing status
+                  if (selectedModel) {
+                    setSelectedModel(prev => prev ? {
+                      ...prev,
+                      jobId: result.jobId,
+                      status: "processing",
+                      processingStage: 'generating_3d_model',
+                      error: undefined // Clear any previous errors
+                    } : null);
+                  }
+                  
+                  // Start polling for job status
+                  console.log("Started job with ID:", result.jobId);
+                  
+                  // Poll for job completion
+                  if (result.jobId) {
+                    setTimeout(async () => {
+                      try {
+                        const jobResult = await pollJobStatus(result.jobId);
+                        if (jobResult.status === 'completed' && jobResult.modelUrl) {
+                          // Update model in database
+                          await modelService.updateModel(selectedModel.id, {
+                            model_status: 'completed',
+                            model_url: jobResult.modelUrl
+                          });
+                          
+                          // Update local state
+                          setSelectedModel(prev => prev ? {
+                            ...prev,
+                            status: "completed",
+                            modelUrl: jobResult.modelUrl,
+                            processingStage: 'completed'
+                          } : null);
+                          
+                          // Refresh models list
+                          loadUserPhotos();
+                        } else if (jobResult.status === 'failed') {
+                          // Update model as failed
+                          await modelService.updateModel(selectedModel.id, {
+                            model_status: 'failed'
+                          });
+                          
+                          // Update local state
+                          setSelectedModel(prev => prev ? {
+                            ...prev,
+                            status: "failed",
+                            processingStage: 'failed',
+                            error: jobResult.errorMessage || 'Model generation failed'
+                          } : null);
+                        }
+                      } catch (pollError) {
+                        console.error("Job polling failed:", pollError);
+                        // Update model as failed
+                        await modelService.updateModel(selectedModel.id, {
+                          model_status: 'failed'
+                        });
+                        
+                        // Update local state
+                        setSelectedModel(prev => prev ? {
+                          ...prev,
+                          status: "failed",
+                          processingStage: 'failed',
+                          error: 'Model generation failed'
+                        } : null);
+                      }
+                    }, 1000);
+                  }
+                  
+                } catch (error) {
+                  console.error("Generation error:", error);
+                  alert(error instanceof Error ? error.message : "Failed to generate model");
+                } finally {
+                  setIsGenerating(false);
+                }
               }}
               canGenerate={true}
               isGenerating={isGenerating}

@@ -76,4 +76,15 @@ export class ModelService {
     if (error) throw error;
     return data;
   }
+
+  async createJob(jobData: any) {
+    const { data, error } = await supabase
+      .from('jobs')
+      .insert(jobData)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  }
 }

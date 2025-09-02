@@ -3,6 +3,7 @@
 import React from "react"
 import { useState, useEffect } from "react"
 import type { ModelViewerJSX } from "@/types/model-viewer"
+import { useIsMobile } from "@/components/ui/use-mobile"
 
 declare global {
   namespace JSX {
@@ -52,6 +53,7 @@ export function ModelViewer({ modelUrl, poster = "/placeholder.svg" }: ModelView
   const [modelError, setModelError] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [modelViewerLoaded, setModelViewerLoaded] = useState(false)
+  const isMobile = useIsMobile()
 
   // Check if model-viewer is loaded and model URL is accessible
   useEffect(() => {
@@ -146,7 +148,9 @@ export function ModelViewer({ modelUrl, poster = "/placeholder.svg" }: ModelView
 
       <div className="mt-4 text-center">
         <p className="text-sm text-gray-600">
-          Click and drag to rotate • Scroll to zoom • Touch to interact
+          {isMobile
+            ? "Touch and drag to rotate • Tap button to activate AR"
+            : "Click and drag to rotate • Scroll to zoom"}
         </p>
       </div>
     </div>

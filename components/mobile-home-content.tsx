@@ -8,6 +8,7 @@ import { ModelPreview } from "@/components/model-preview"
 import { MobileNavigationHeader } from "@/components/mobile-navigation-header"
 import { useNavigation } from "@/contexts/NavigationContext"
 import { useIsMobile } from "@/components/ui/use-mobile"
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext"
 import { AuthModal } from "@/components/auth-modal"
 import { StorageService } from "@/lib/storage.service"
@@ -38,7 +39,7 @@ export function MobileHomeContent() {
   const [models, setModels] = useState<ModelData[]>([])
   const [error, setError] = useState<string | null>(null)
   
-  const { generateModel, retryModelGeneration, pollJobStatus } = useModelGeneration();
+  const { generateModel, retryModelGeneration, pollJobStatus, isRetrying } = useModelGeneration();
   const modelService = new ModelService();
 
   // Add a new useEffect for initial mount:
@@ -268,18 +269,20 @@ export function MobileHomeContent() {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900">Your 3D Models</h2>
-              <button
+              <Button
+                variant="default" 
+                size="sm"
                 onClick={navigateToUpload}
-                className="text-blue-500 hover:text-blue-700 text-sm font-medium"
+                disabled={isRetrying}
               >
                 + Add Model
-              </button>
+              </Button>
             </div>
             <ModelGallery 
               models={models} 
-              onSelectModel={handleSelectModel} 
+              onSelectModel={isRetrying ? undefined : handleSelectModel} 
               selectedModelId={selectedModel?.id}
-              onNavigateToUpload={navigateToUpload}
+              onNavigateToUpload={isRetrying ? undefined : navigateToUpload}
               onNavigateBack={navigateToGallery}
               isFullView={currentView === 'gallery'}
               isLoading={isLoading}
@@ -293,7 +296,7 @@ export function MobileHomeContent() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900">Upload Photos</h2>
             </div>
-            <FileUpload onUpload={(file: File) => handleUpload(file, "front")} disabled={false} />
+            <FileUpload onUpload={(file: File) => handleUpload(file, "front")} disabled={isRetrying} />
           </div>
         )}
 
@@ -421,6 +424,7 @@ export function MobileHomeContent() {
               }}
               canGenerate={true}
               isGenerating={isGenerating}
+              isRetrying={isRetrying}
               processingStage={selectedModel.processingStage}
               selectedModel={selectedModel}
               onNavigateBack={navigateToGallery}

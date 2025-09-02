@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useCredits } from "@/hooks/useCredits";
 import { ModelService } from "@/lib/supabase/model.service";
 import { StorageService } from "@/lib/storage.service";
@@ -24,6 +24,9 @@ interface JobStatusResponse {
 export function useModelGeneration() {
   const { deductCredits, addCredits, hasSufficientCredits } = useCredits();
   const modelService = new ModelService();
+  
+  // State for tracking retry operations
+  const [isRetrying, setIsRetrying] = useState(false);
 
   /**
    * Generate a 3D model with automatic credit deduction
@@ -336,6 +339,9 @@ export function useModelGeneration() {
     let shouldRollbackCredits = false;
 
     try {
+      // Set retry state to true
+      setIsRetrying(true);
+      
       // Deduct credits first
       await deductCredits(1);
       shouldRollbackCredits = true;
@@ -411,6 +417,9 @@ export function useModelGeneration() {
       
       console.error("Model retry failed:", error);
       throw error;
+    } finally {
+      // Always set retry state to false when done
+      setIsRetrying(false);
     }
   }, [deductCredits, hasSufficientCredits]);
 
@@ -418,6 +427,7 @@ export function useModelGeneration() {
     generateModel,
     retryModelGeneration,
     pollJobStatus,
-    updateModelStatus
+    updateModelStatus,
+    isRetrying
   };
 }

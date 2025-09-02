@@ -14,6 +14,7 @@ interface ModelGeneratorProps {
   onGenerate?: () => void
   canGenerate?: boolean
   isGenerating?: boolean
+  isRetrying?: boolean
   processingStage?: ModelStatus
   selectedModel?: any
   errorMessage?: string
@@ -50,6 +51,7 @@ export function ModelGenerator({
   onGenerate,
   canGenerate = false,
   isGenerating = false,
+  isRetrying = false,
   processingStage,
   selectedModel,
   errorMessage,
@@ -127,8 +129,9 @@ export function ModelGenerator({
                 </span>
                 {photo && key !== "front" && (
                   <button
-                    onClick={() => onRemove(key)}
-                    className="text-xs text-red-500 hover:text-red-700"
+                    onClick={isRetrying ? undefined : () => onRemove(key)}
+                    disabled={isRetrying}
+                    className={`text-xs ${isRetrying ? 'text-gray-400 cursor-not-allowed' : 'text-red-500 hover:text-red-700'}`}
                   >
                     Remove
                   </button>
@@ -143,18 +146,20 @@ export function ModelGenerator({
                     : photo
                       ? "border-green-300 bg-green-50 hover:border-green-400 cursor-pointer"
                       : "border-gray-300 hover:border-gray-400 bg-gray-50 hover:bg-gray-100 cursor-pointer",
-                  isLoadingPosition ? "animate-pulse" : ""
+                  isLoadingPosition ? "animate-pulse" : "",
+                  isRetrying ? "opacity-50 cursor-not-allowed" : ""
                 )}
-                onDragOver={handleDragOver(key)}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop(key)}
-                onClick={() => document.getElementById(`file-input-${key}`)?.click()}
+                onDragOver={isRetrying ? undefined : handleDragOver(key)}
+                onDragLeave={isRetrying ? undefined : handleDragLeave}
+                onDrop={isRetrying ? undefined : handleDrop(key)}
+                onClick={isRetrying ? undefined : () => document.getElementById(`file-input-${key}`)?.click()}
               >
                 <input
                   id={`file-input-${key}`}
                   type="file"
                   accept="image/*"
-                  onChange={handleFileSelect(key)}
+                  onChange={isRetrying ? undefined : handleFileSelect(key)}
+                  disabled={isRetrying}
                   className="hidden"
                 />
 
@@ -182,6 +187,7 @@ export function ModelGenerator({
                           e.stopPropagation()
                           document.getElementById(`file-input-${key}`)?.click()
                         }}
+                        disabled={isRetrying}
                       >
                         Replace
                       </Button>
@@ -227,14 +233,16 @@ export function ModelGenerator({
         <div className="mb-4">
           <Button
             onClick={onGenerate}
-            disabled={!canGenerate}
+            disabled={!canGenerate || isRetrying}
             className="w-full bg-blue-600 hover:bg-blue-700 h-12 text-base font-medium"
           >
-            {isGenerating
-              ? "Generating..."
-              : selectedModel.status === "completed"
-                ? "Regenerate 3D Model"
-                : "Generate 3D Model"}
+            {isRetrying
+              ? "Retrying..."
+              : isGenerating
+                ? "Generating..."
+                : selectedModel.status === "completed"
+                  ? "Regenerate 3D Model"
+                  : "Generate 3D Model"}
           </Button>
         </div>
       )}

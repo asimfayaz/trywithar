@@ -6,7 +6,7 @@ import { useNavigation } from "@/contexts/NavigationContext"
 
 interface ModelGalleryProps {
   models: ModelData[]
-  onSelectModel: (model: ModelData) => void
+  onSelectModel?: (model: ModelData) => void
   selectedModelId?: string
   onNavigateToUpload?: () => void
   onNavigateBack?: () => void
@@ -104,7 +104,7 @@ export function ModelGallery({ models, onSelectModel, selectedModelId, onNavigat
                 ? "border-blue-500 ring-2 ring-blue-200"
                 : "border-transparent hover:border-gray-300",
             )}
-            onClick={() => onSelectModel(model)}
+            onClick={() => onSelectModel?.(model)}
             title={`Last updated: ${model.updatedAt.toLocaleString()}`}
           >
             <img

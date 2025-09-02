@@ -39,19 +39,15 @@ export function MobileHomeContent() {
   
   const modelService = new ModelService();
 
-  // Ensure we start on the gallery view when component mounts
+  // Add a new useEffect for initial mount:
   useEffect(() => {
-    if (currentView !== 'gallery') {
-      navigateToGallery();
-    }
-  }, [currentView, navigateToGallery]);
+    navigateToGallery(); // Set initial view to gallery
+  }, []);
 
   // Reset to gallery view when user logs in/out
   useEffect(() => {
-    if (currentView !== 'gallery') {
-      navigateToGallery();
-    }
-  }, [user, currentView, navigateToGallery]);
+    navigateToGallery(); // Always reset to gallery when user changes
+  }, [user]);
 
   // Load user photos
   const loadUserPhotos = async () => {

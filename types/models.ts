@@ -18,7 +18,7 @@ export interface ModelData {
   expiresAt?: Date;
   id: string;
   thumbnail: string;
-  status: "pending" | "processing" | "completed" | "failed";
+  status: "draft" | "processing" | "completed" | "failed";
   modelUrl?: string;
   uploadedAt: Date;
   updatedAt: Date;

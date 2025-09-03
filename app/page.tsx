@@ -38,7 +38,7 @@ export interface ModelData {
   expiresAt?: Date
   id: string
   thumbnail: string
-  status: "pending" | "processing" | "completed" | "failed"
+  status: "draft" | "processing" | "completed" | "failed"
   modelUrl?: string
   uploadedAt: Date
   updatedAt: Date
@@ -115,7 +115,7 @@ export default function Home() {
         let processingStage: ProcessingStage | undefined
         
   const statusMap: Record<string, {status: string, processingStage?: ProcessingStage}> = {
-    'draft': { status: 'pending' },
+    'draft': { status: 'draft' },
     'uploading_photos': { status: 'processing', processingStage: 'uploading_photos' },
     'removing_background': { status: 'processing', processingStage: 'removing_background' },
     'generating_3d_model': { status: 'processing', processingStage: 'generating_3d_model' },
@@ -201,7 +201,7 @@ return {
 const previewModel: ModelData = {
   id: tempId,
   thumbnail: dataUrl,
-  status: "pending",
+  status: "draft",
   uploadedAt: new Date(),
   updatedAt: new Date(),
   photoSet: { front: uploadItem },

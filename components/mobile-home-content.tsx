@@ -65,7 +65,7 @@ export function MobileHomeContent() {
       
       const modelData: ModelData[] = modelsData.map((model: any) => {
         const statusMap: Record<string, {status: string, processingStage?: ModelStatus}> = {
-          'draft': { status: 'pending' },
+          'draft': { status: 'draft' },
           'uploading_photos': { status: 'processing', processingStage: 'uploading_photos' },
           'removing_background': { status: 'processing', processingStage: 'removing_background' },
           'generating_3d_model': { status: 'processing', processingStage: 'generating_3d_model' },
@@ -196,7 +196,7 @@ export function MobileHomeContent() {
         const previewModel: ModelData = {
           id: tempId,
           thumbnail: dataUrl,
-          status: "pending",
+          status: "draft",
           uploadedAt: new Date(),
           updatedAt: new Date(),
           photoSet: { front: uploadItem },

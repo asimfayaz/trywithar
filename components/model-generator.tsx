@@ -233,16 +233,9 @@ export function ModelGenerator({
         <div className="mb-4">
           <Button
             onClick={onGenerate}
-            disabled={!canGenerate || isRetrying}
+            disabled={!canGenerate || isRetrying || selectedModel.status !== 'draft'}
             className="w-full bg-blue-600 hover:bg-blue-700 h-12 text-base font-medium"
-          >
-            {isRetrying
-              ? "Retrying..."
-              : isGenerating
-                ? "Generating..."
-                : selectedModel.status === "completed"
-                  ? "Regenerate 3D Model"
-                  : "Generate 3D Model"}
+          >Generate 3D Model
           </Button>
         </div>
       )}
@@ -350,10 +343,10 @@ export function ModelGenerator({
       {/* Instructions */}
       <div className="text-center">
         <p className="text-sm text-gray-500">
-          {(!selectedModel || selectedModel?.status === "pending") && "Upload up to 4 photos for better 3D model quality"}
+          {(!selectedModel || selectedModel?.status === "draft") && "Upload up to 4 photos for better 3D model quality"}
         </p>
         <p className="text-xs mt-1 text-gray-400">
-          {(!selectedModel || selectedModel?.status === "pending") && "Front photo is required. Left, Right, and Back are optional."}
+          {(!selectedModel || selectedModel?.status === "draft") && "Front photo is required. Left, Right, and Back are optional."}
         </p>
       </div>
     </div>

@@ -118,7 +118,7 @@ export function ModelGallery({ models, onSelectModel, selectedModelId, onNavigat
 
             {/* Status Badge */}
             <div className="absolute top-2 right-2">
-              {model.status === "pending" && (
+              {model.status === "draft" && (
                 <div className="bg-gray-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
                   <div className="w-2 h-2 bg-white rounded-full mr-1" />
                   Pending

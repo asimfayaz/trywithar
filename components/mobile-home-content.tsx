@@ -268,7 +268,7 @@ export function MobileHomeContent() {
         {currentView === 'gallery' && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Your 3D Models</h2>
+              <h2 className="text-xl font-semibold text-gray-900">Your 3D Models</h2>
               <Button
                 variant="default" 
                 size="sm"
@@ -294,7 +294,7 @@ export function MobileHomeContent() {
         {currentView === 'upload' && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Upload Photos</h2>
+              <h2 className="text-xl font-semibold text-gray-900">Upload Photos</h2>
             </div>
             <FileUpload onUpload={(file: File) => handleUpload(file, "front")} disabled={isRetrying} />
           </div>
@@ -303,7 +303,7 @@ export function MobileHomeContent() {
         {currentView === 'generator' && selectedModel && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">3D Model Generator</h2>
+              <h2 className="text-xl font-semibold text-gray-900">3D Model</h2>
               
             </div>
             <ModelGenerator

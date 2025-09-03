@@ -202,7 +202,7 @@ export function ModelGenerator({
                       </div>
                     ) : (
                       <>
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center mb-2 bg-gray-200">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-200">
                           <svg
                             className="w-4 h-4 text-gray-500"
                             fill="none"
@@ -212,11 +212,8 @@ export function ModelGenerator({
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                           </svg>
                         </div>
-                        <span className="text-xs font-medium text-gray-600">
+                        <span className="hidden sm:inline text-xs font-medium text-gray-600 mt-2">
                           {isDragOver ? `Drop ${label.toLowerCase()} photo` : `Add ${label}`}
-                        </span>
-                        <span className="text-xs mt-1 text-gray-400">
-                          Click or drag
                         </span>
                       </>
                     )}
@@ -226,6 +223,16 @@ export function ModelGenerator({
             </div>
           )
         })}
+      </div>
+
+      {/* Instructions */}
+      <div className="text-center mb-4">
+        <p className="text-sm text-gray-500 sm:mb-2">
+          {(!selectedModel || selectedModel?.status === "draft") && "Upload up to 4 photos for better 3D model quality"}
+        </p>
+        <p className="hidden sm:inline text-xs text-gray-400">
+          {(!selectedModel || selectedModel?.status === "draft") && "Front photo is required. Left, Right, and Back are optional."}
+        </p>
       </div>
 
       {/* Generate Button - appears right after the photo grid */}
@@ -340,14 +347,9 @@ export function ModelGenerator({
         </div>
       )}
 
-      {/* Instructions */}
+      {/* Information */}
       <div className="text-center">
-        <p className="text-sm text-gray-500">
-          {(!selectedModel || selectedModel?.status === "draft") && "Upload up to 4 photos for better 3D model quality"}
-        </p>
-        <p className="text-xs mt-1 text-gray-400">
-          {(!selectedModel || selectedModel?.status === "draft") && "Front photo is required. Left, Right, and Back are optional."}
-        </p>
+        <p className="text-sm">Consumes 1 credit and takes ~2 minutes</p>
       </div>
     </div>
   )

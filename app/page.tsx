@@ -111,7 +111,7 @@ export default function Home() {
       );
       
       const modelData: ModelData[] = modelsData.map((model: any) => {
-        let status: "pending" | "processing" | "completed" | "failed"
+        let status: "draft" | "processing" | "completed" | "failed"
         let processingStage: ProcessingStage | undefined
         
   const statusMap: Record<string, {status: string, processingStage?: ProcessingStage}> = {
@@ -840,18 +840,18 @@ const updatedModel: ModelData = {
           </header>
 
           {/* Main Grid Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6 h-[calc(100vh-88px)]">
+          <div className="grid grid-cols-1 lg:grid-cols-3 md:grid-cols-3 gap-6 p-6 h-[calc(100vh-88px)]">
             {/* Left Column - Gallery and Upload */}
             <div className="lg:col-span-1 space-y-4 flex flex-col min-h-0">
               {/* Upload Section */}
               <div className="grid row-span-1 bg-white rounded-lg shadow-sm border border-gray-200 p-6 h-fit">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Upload Photos</h2>
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Upload Photos</h2>
                 <FileUpload onUpload={(file: File) => handleUpload(file, "front")} disabled={false} />
               </div>
 
               {/* Model Gallery */}
               <div className="grid row-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex-1 min-h-0">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Your 3D Models</h2>
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Your 3D Models</h2>
                 <ModelGallery 
                   models={models} 
                   onSelectModel={handleSelectModel} 
@@ -862,9 +862,9 @@ const updatedModel: ModelData = {
             </div>
 
             {/* Right Column - Model Viewer */}
-            <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex flex-col">
+            <div className="lg:col-span-2 md:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex flex-col">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">3D Model</h2>
+                <h2 className="text-xl font-semibold text-gray-900">3D Model</h2>
               </div>
 
               <div className="flex-1 min-h-0 flex flex-col">

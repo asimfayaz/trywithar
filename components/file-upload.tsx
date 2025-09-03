@@ -96,7 +96,7 @@ export function FileUpload({ onUpload, disabled = false }: FileUploadProps) {
             </svg>
           </div>
 
-          <div className="flex-shrink-0 text-center">
+          <div className="hidden sm:inline flex-shrink-0 text-center">
             <p className={cn("text-sm font-medium mb-1", disabled ? "text-gray-400" : "text-gray-900")}>
               {disabled ? "Photos uploaded" : "Drop front photo here"}
             </p>
@@ -114,7 +114,7 @@ export function FileUpload({ onUpload, disabled = false }: FileUploadProps) {
                 </label>
               </Button>
 
-              <p className="text-xs text-gray-400">JPG, PNG, WebP up to 10MB</p>
+              <p className="text-xs text-gray-400">JPG, PNG up to 10MB</p>
             </div>
           )}
         </div>

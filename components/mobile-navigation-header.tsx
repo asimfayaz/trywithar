@@ -41,7 +41,7 @@ export function MobileNavigationHeader({ currentView, onBack, user, onLogin, onL
           // Gallery view: Show logo and app name
           <div className="flex items-center">
             <Logo />
-            <h1 className="text-2xl font-bold text-gray-900 ml-3">Try with AR</h1>
+            <h1 className="text-xl font-bold text-gray-900 ml-3">Try with AR</h1>
           </div>
         ) : (
           // Non-gallery views: Back button + title

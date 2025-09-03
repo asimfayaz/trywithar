@@ -144,7 +144,7 @@ export default function BillingPage() {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-blue-600">{user.credits}</div>
+                  <div className="text-3xl font-bold text-gray-900">{user.credits}</div>
                   <p className="text-sm text-gray-600">Available Credits</p>
                 </div>
             <div className="text-center">

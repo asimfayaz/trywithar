@@ -37,7 +37,7 @@ export function UserDashboard({ user, onLogin, onLogout }: UserDashboardProps) {
   return (
     <div className="flex items-center space-x-4">
       {/* Quota Display */}
-      <div className="hidden sm:flex items-center space-x-2 text-sm">
+      <div className="items-center space-x-2 text-sm">
         {hasCredits ? (
           <Badge variant="secondary" className="bg-blue-100 text-blue-800">
             {userCredits} credits
@@ -63,20 +63,6 @@ export function UserDashboard({ user, onLogin, onLogout }: UserDashboardProps) {
             {userEmail && <p className="text-xs leading-none text-muted-foreground">{userEmail}</p>}
           </div>
           <DropdownMenuSeparator />
-
-          {/* Mobile quota display */}
-          <div className="sm:hidden p-2">
-            {hasCredits ? (
-              <Badge variant="secondary" className="bg-blue-100 text-blue-800 w-full justify-center">
-                {userCredits} credits
-              </Badge>
-            ) : (
-              <Badge variant="destructive" className="w-full justify-center">
-                No credits remaining
-              </Badge>
-            )}
-          </div>
-          <DropdownMenuSeparator className="sm:hidden" />
 
           <DropdownMenuItem asChild>
             <Link href="/billing">

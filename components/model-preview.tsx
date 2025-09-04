@@ -68,11 +68,8 @@ export function ModelPreview({
                         />
                       </svg>
                     </div>
-                    <span className="text-xs font-medium text-gray-400">
+                    <span className="hidden sm:inline text-center text-xs font-medium text-gray-400">
                       Model completed
-                    </span>
-                    <span className="text-xs mt-1 text-gray-400">
-                      Editing disabled
                     </span>
                   </div>
                 )}
@@ -84,11 +81,8 @@ export function ModelPreview({
 
       {/* Instructions */}
       <div className="text-center">
-        <p className="text-sm text-gray-400">
-          3D model generated successfully from your photos
-        </p>
         <p className="text-xs mt-1 text-gray-400">
-          Use the viewer above to interact with your 3D model
+          Photo(s) you provided to generate this model
         </p>
       </div>
     </div>

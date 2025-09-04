@@ -1,10 +1,10 @@
 "use client"
 
 export const Logo = () => (
-  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white">
+  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white">
     <svg 
-      width="16" 
-      height="16" 
+      width="28" 
+      height="28" 
       viewBox="0 0 64 64" 
       fill="none" 
       stroke="currentColor" 

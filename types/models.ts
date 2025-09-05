@@ -13,6 +13,8 @@ export interface PhotoSet {
 
 export type ModelStatus = "draft" | "uploading_photos" | "removing_background" | "generating_3d_model" | "completed" | "failed";
 
+export type TransactionType = 'purchase' | 'usage' | 'award';
+
 export interface ModelData {
   isTemporary?: boolean;
   expiresAt?: Date;

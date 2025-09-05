@@ -75,25 +75,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (authUser) {
           setUser(prev => {
             if (!prev) {
-              userService.getUserById(authUser.id).then(fullUser => {
-                setUser({
-                  id: fullUser.id,
-                  name: fullUser.name || authUser.email || "User",
-                  email: fullUser.email || "",
-                  avatar_url: fullUser.avatar_url || authUser.user_metadata?.avatar_url || "/placeholder.svg?height=40&width=40",
-                  credits: fullUser.credits || 0,
-                })
-              }).catch(error => {
-                console.error('Failed to load user data in listener:', error)
-              });
-              
-              return {
+              // For new users, create a temporary user object
+              const tempUser = {
                 id: authUser.id,
                 name: authUser.user_metadata?.name || authUser.email || "User",
                 email: authUser.email || "",
                 avatar_url: authUser.user_metadata?.avatar_url || "/placeholder.svg?height=40&width=40",
-                credits: 0,
-              }
+              };
+              
+              // Attempt to load full user data
+              userService.getUserById(authUser.id).then(fullUser => {
+                // Check if this is a new user
+                setUser(fullUser);
+              }).catch(error => {
+                console.error('Failed to load user data in listener:', error);
+                // If we can't load user data, use the temporary user
+                setUser(tempUser);
+              });
+              
+              return tempUser;
             }
             
             return {

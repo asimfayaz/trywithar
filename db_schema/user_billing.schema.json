@@ -1,16 +1,62 @@
 {
-  "table": "user_billing",
-  "columns": [
-    { "name": "id", "type": "uuid", "primary_key": true, "foreign_key": {"table": "auth.users", "column": "id"}, "nullable": false },
-    { "name": "credits", "type": "numeric(10,2)", "nullable": true, "default": 2 },
-    { "name": "created_at", "type": "timestamp with time zone", "nullable": true, "default": "now()" },
-    { "name": "updated_at", "type": "timestamp with time zone", "nullable": true, "default": "now()" },
-    { "name": "total_models_generated", "type": "integer", "nullable": false, "default": 0 }
-  ],
+  "table": "public.user_billing",
+  "columns": {
+    "id": {
+      "type": "uuid",
+      "nullable": false,
+      "primary_key": true,
+      "foreign_key": {
+        "references": "auth.users(id)",
+        "on_delete": "CASCADE"
+      },
+      "index": "idx_user_billing_id"
+    },
+    "credits": {
+      "type": "numeric(10,2)",
+      "nullable": true,
+      "default": 2
+    },
+    "created_at": {
+      "type": "timestamptz",
+      "nullable": true,
+      "default": "now()"
+    },
+    "updated_at": {
+      "type": "timestamptz",
+      "nullable": true,
+      "default": "now()",
+      "trigger": "update_user_billing_updated_at"
+    },
+    "total_models_generated": {
+      "type": "integer",
+      "nullable": true,
+      "default": 0
+    }
+  },
+  "constraints": {
+    "primary_key": ["id"],
+    "foreign_keys": [
+      {
+        "column": "id",
+        "references": "auth.users(id)",
+        "on_delete": "CASCADE"
+      }
+    ]
+  },
   "indexes": [
-    { "name": "idx_user_billing_id", "columns": ["id"] }
+    {
+      "name": "idx_user_billing_id",
+      "columns": ["id"],
+      "method": "btree"
+    }
   ],
   "triggers": [
-    { "name": "update_user_billing_updated_at", "event": "BEFORE UPDATE", "function": "update_updated_at_column" }
+    {
+      "name": "update_user_billing_updated_at",
+      "timing": "BEFORE",
+      "event": "UPDATE",
+      "for_each": "ROW",
+      "function": "update_updated_at_column()"
+    }
   ]
 }

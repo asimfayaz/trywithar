@@ -20,6 +20,8 @@ export default function BillingPage() {
   const [userPhotos, setUserPhotos] = useState<any[]>([])
   const [isLoadingData, setIsLoadingData] = useState(true)
 
+  const [session, setSession] = useState<any>(null);
+
   // Load user data on component mount
   useEffect(() => {
     const loadUserData = async () => {
@@ -30,6 +32,8 @@ export default function BillingPage() {
           console.error('No authenticated user found', sessionError);
           return;
         }
+        
+        setSession(session);
         
         // Get user data using userService
         const userData = await userService.getUserById(session.user.id);
@@ -48,43 +52,41 @@ export default function BillingPage() {
     loadUserData()
   }, [])
 
-  // Mock transaction history
-  const transactions = [
-    {
-      id: "1",
-      type: "purchase" as const,
-      amount: 10.0,
-      credits: 10,
-      date: new Date("2024-01-15"),
-      status: "completed" as const,
-    },
-    {
-      id: "2",
-      type: "usage" as const,
-      amount: -1.0,
-      credits: -1,
-      date: new Date("2024-01-14"),
-      status: "completed" as const,
-      description: "3D Model Generation",
-    },
-    {
-      id: "3",
-      type: "usage" as const,
-      amount: -1.0,
-      credits: -1,
-      date: new Date("2024-01-13"),
-      status: "completed" as const,
-      description: "3D Model Generation",
-    },
-    {
-      id: "4",
-      type: "purchase" as const,
-      amount: 25.0,
-      credits: 25,
-      date: new Date("2024-01-10"),
-      status: "completed" as const,
-    },
-  ]
+  // State for transactions and pagination
+  const [transactions, setTransactions] = useState<any[]>([])
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(false)
+
+  // Fetch transaction history
+  const fetchTransactions = async (page: number) => {
+    setIsLoadingTransactions(true)
+    try {
+      const response = await fetch(`/api/transactions?page=${page}&limit=10`, {
+        headers: {
+          'Authorization': `Bearer ${session?.access_token}`
+        }
+      })
+      const data = await response.json()
+      if (response.ok) {
+        setTransactions(data.transactions)
+        setTotalPages(data.pagination.totalPages)
+      } else {
+        console.error('Failed to fetch transactions:', data.error)
+      }
+    } catch (error) {
+      console.error('Network error fetching transactions:', error)
+    } finally {
+      setIsLoadingTransactions(false)
+    }
+  }
+
+  // Load transactions when component mounts or page changes
+  useEffect(() => {
+    if (user) {
+      fetchTransactions(currentPage)
+    }
+  }, [user, currentPage])
 
   const handlePurchase = async (amount: number) => {
     setIsLoading(true)
@@ -223,14 +225,28 @@ export default function BillingPage() {
             <CardDescription>Your recent purchases and usage</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {transactions.map((transaction, index) => (
-                <div key={transaction.id}>
-                  <div className="flex items-center justify-between py-3">
+            {isLoadingTransactions ? (
+              <div className="flex items-center justify-center py-6">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            ) : transactions.length === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-gray-500">No transactions found</p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-4">
+                  {transactions.map((transaction, index) => (
+                    <div key={transaction.id}>
+                      <div className="flex items-center justify-between py-3">
                     <div className="flex items-center space-x-3">
                       <div
                         className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          transaction.type === "purchase" ? "bg-green-100 text-green-600" : "bg-blue-100 text-blue-600"
+                          transaction.type === "purchase" 
+                            ? "bg-green-100 text-green-600" 
+                            : transaction.type === "award"
+                              ? "bg-purple-100 text-purple-600"
+                              : "bg-blue-100 text-blue-600"
                         }`}
                       >
                         {transaction.type === "purchase" ? (
@@ -240,6 +256,15 @@ export default function BillingPage() {
                               strokeLinejoin="round"
                               strokeWidth={2}
                               d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                            />
+                          </svg>
+                        ) : transaction.type === "award" ? (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"
                             />
                           </svg>
                         ) : (
@@ -256,30 +281,57 @@ export default function BillingPage() {
                       <div>
                         <div className="font-medium">
                           {transaction.type === "purchase"
-                            ? `Credit Purchase - ${transaction.credits} credits`
-                            : transaction.description || "Credit Usage"}
+                            ? `Bought credits - $${transaction.amount?.toFixed(0)}`
+                            : transaction.type === "award"
+                              ? transaction.description || "Credit Award"
+                              : transaction.description || "Credit Usage"}
                         </div>
-                        <div className="text-sm text-gray-500">{transaction.date.toLocaleDateString()}</div>
+                        <div className="text-sm text-gray-500">
+                          {new Date(transaction.created_at).toLocaleDateString()} {new Date(transaction.created_at).toLocaleTimeString()}
+                        </div>
                       </div>
                     </div>
                     <div className="text-right">
                       <div
-                        className={`font-medium ${transaction.type === "purchase" ? "text-green-600" : "text-red-600"}`}
+                        className={`font-medium ${
+                          transaction.type === "purchase" 
+                            ? "text-green-600" 
+                            : transaction.type === "award"
+                              ? "text-purple-600"
+                              : "text-red-600"
+                        }`}
                       >
-                        {transaction.type === "purchase" ? "+" : ""}${Math.abs(transaction.amount).toFixed(2)}
+                        {transaction.type === "purchase" || transaction.type === "award" ? "+" : "-"}
+                        {Math.abs(transaction.credits)}
                       </div>
-                      <Badge
-                        variant={transaction.status === "completed" ? "secondary" : "destructive"}
-                        className="text-xs"
-                      >
-                        {transaction.status}
-                      </Badge>
                     </div>
                   </div>
                   {index < transactions.length - 1 && <Separator />}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+                {/* Pagination controls */}
+                <div className="mt-6 flex items-center justify-between">
+                  <Button 
+                    variant="outline" 
+                    disabled={currentPage <= 1}
+                    onClick={() => setCurrentPage(currentPage - 1)}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm text-gray-600">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <Button 
+                    variant="outline" 
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setCurrentPage(currentPage + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -53,43 +53,42 @@ export function AuthModal({ isOpen, onClose, onLogin, reason, initialForgotPassw
         return
     }
 
-      if (isSignUp) {
-        // Handle sign up
-        if (password !== confirmPassword) {
-          setError("Passwords don't match!")
-          return
-        }
-        if (password.length < 8) {
-          setError("Password must be at least 8 characters long")
-          return
-        }
-        if (!name.trim()) {
-          setError("Name is required")
-          return
-        }
-
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              name: name.trim()
-            }
+        if (isSignUp) {
+          // Handle sign up
+          if (password !== confirmPassword) {
+            setError("Passwords don't match!")
+            return
           }
-        })
-        if (error) throw error
-        const user = data.user
-        
-        // Create billing record for new user
-        await userService.createUserBilling(user!.id, {
-          free_models_used: 0,
-          credits: 0
-        })
-        
-        // Fetch full user profile
-        const fullUser = await userService.getUserById(user!.id)
-        onLogin(fullUser)
-      } else {
+          if (password.length < 8) {
+            setError("Password must be at least 8 characters long")
+            return
+          }
+          if (!name.trim()) {
+            setError("Name is required")
+            return
+          }
+
+          const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              data: {
+                display_name: name.trim()
+              }
+            }
+          })
+          if (error) throw error
+          const user = data.user
+          
+          // AuthContext will handle user initialization including billing
+          onLogin({
+            id: user!.id,
+            email: user!.email!,
+            name: name.trim(),
+            avatar_url: null,
+            credits: 0
+          })
+        } else {
         // Handle sign in
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
@@ -111,7 +110,20 @@ export function AuthModal({ isOpen, onClose, onLogin, reason, initialForgotPassw
       setIsSignUp(false)
       setShowForgotPassword(false)
     } catch (error) {
-      console.error('Auth error:', error)
+      // Enhanced error logging
+      console.groupCollapsed('Auth Error Details');
+      console.error('Auth error occurred:', error);
+      if (error instanceof Error) {
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
+        console.error('Stack trace:', error.stack);
+      }
+      if (typeof error === 'object' && error !== null) {
+        console.error('Error object:', JSON.stringify(error, null, 2));
+      }
+      console.groupEnd();
+
+      // User-friendly error message
       setError(error instanceof Error ? error.message : 'Authentication failed')
     } finally {
       setIsLoading(false)

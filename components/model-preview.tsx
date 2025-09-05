@@ -53,7 +53,7 @@ export function ModelPreview({
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full p-2">
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center mb-2 bg-gray-200">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-200">
                       <svg
                         className="w-4 h-4 text-gray-400"
                         fill="none"
@@ -68,7 +68,7 @@ export function ModelPreview({
                         />
                       </svg>
                     </div>
-                    <span className="hidden sm:inline text-center text-xs font-medium text-gray-400">
+                    <span className="hidden sm:inline text-center mt-2 text-xs font-medium text-gray-400">
                       Model completed
                     </span>
                   </div>

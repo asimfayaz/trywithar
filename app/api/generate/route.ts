@@ -151,6 +151,25 @@ export async function POST(request: NextRequest) {
     // Store original credits for potential rollback
     originalCredits = userBilling.credits;
     
+    // Log credit usage transaction
+    const transactionResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/transactions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        type: 'usage',
+        amount: 0, // Currently no monetary value, just credit usage
+        credits: -1,
+        description: "3D Model Generation"
+      })
+    });
+    
+    if (!transactionResponse.ok) {
+      const errorData = await transactionResponse.json();
+      throw new Error(`Failed to log transaction: ${errorData.error}`);
+    }
+    
     // Prepare Firtoz-Trellis input
     const input = {
       images: imageUrls,

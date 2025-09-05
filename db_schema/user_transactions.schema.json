@@ -1,0 +1,58 @@
+{
+  "table": "public.user_transactions",
+  "columns": {
+    "id": {
+      "type": "uuid",
+      "nullable": false,
+      "default": "gen_random_uuid()",
+      "primary_key": true
+    },
+    "user_id": {
+      "type": "uuid",
+      "nullable": false,
+      "foreign_key": {
+        "references": "auth.users(id)",
+        "on_delete": "CASCADE"
+      },
+      "index": "idx_user_transactions_user_id"
+    },
+    "type": {
+      "type": "public.transaction_type",
+      "nullable": false
+    },
+    "amount": {
+      "type": "numeric(10,2)",
+      "nullable": false
+    },
+    "credits": {
+      "type": "integer",
+      "nullable": false
+    },
+    "description": {
+      "type": "text",
+      "nullable": true
+    },
+    "created_at": {
+      "type": "timestamptz",
+      "nullable": false,
+      "default": "now()"
+    }
+  },
+  "constraints": {
+    "primary_key": ["id"],
+    "foreign_keys": [
+      {
+        "column": "user_id",
+        "references": "auth.users(id)",
+        "on_delete": "CASCADE"
+      }
+    ]
+  },
+  "indexes": [
+    {
+      "name": "idx_user_transactions_user_id",
+      "columns": ["user_id"],
+      "method": "btree"
+    }
+  ]
+}

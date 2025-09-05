@@ -94,7 +94,7 @@ export const userService = {
     return {
       id: authUser.id,
       email: authUser.email!,
-      name: authUser.user_metadata?.name || null,
+      name: authUser.user_metadata?.display_name || authUser.user_metadata?.name || null,
       avatar_url: authUser.user_metadata?.avatar_url || null,
       created_at: authUser.created_at,
       free_models_used: billingData.free_models_used,
@@ -127,7 +127,7 @@ export const userService = {
     return {
       id: session.user.id,
       email: session.user.email!,
-      name: session.user.user_metadata?.name || null,
+      name: session.user.user_metadata?.display_name || session.user.user_metadata?.name || null,
       avatar_url: session.user.user_metadata?.avatar_url || null,
       created_at: session.user.created_at,
       free_models_used: billingData.free_models_used,
@@ -161,7 +161,7 @@ export const userService = {
     return {
       id: session.user.id,
       email: session.user.email!,
-      name: session.user.user_metadata?.name || null,
+      name: session.user.user_metadata?.display_name || session.user.user_metadata?.name || null,
       avatar_url: session.user.user_metadata?.avatar_url || null,
       created_at: session.user.created_at,
       free_models_used: billingData.free_models_used,

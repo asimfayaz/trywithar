@@ -396,7 +396,20 @@ export default function SettingsPage() {
           <CardContent>
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="destructive">Delete Account</Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-block">
+                        <Button variant="destructive" disabled>
+                          Delete Account
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent className="bg-white shadow-lg p-3 rounded-md">
+                      <p>Coming soon</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>

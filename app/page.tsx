@@ -174,7 +174,7 @@ return {
     } catch (error) {
       console.error('Logout error:', error)
     }
-    setModels([]); // Explicitly reset models on logout
+    setModels([]); // Reset models on logout
     setSelectedModel(null)
     setCurrentPhotoSet({})
     setIsGenerating(false)
@@ -854,13 +854,13 @@ const updatedModel: ModelData = {
               {/* Model Gallery */}
               <div className="grid row-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex-1 min-h-0">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Your 3D Models</h2>
-                <ModelGallery 
-                  key={user ? user.id : 'logged-out'}
-                  models={models} 
-                  onSelectModel={handleSelectModel} 
-                  selectedModelId={selectedModel?.id}
-                  onNavigateToUpload={() => {}} 
-                />
+              <ModelGallery 
+                key={user ? user.id : 'logged-out'}
+                models={models} 
+                onSelectModel={handleSelectModel} 
+                selectedModelId={selectedModel?.id}
+                onNavigateToUpload={() => {}} 
+              />
               </div>
             </div>
 

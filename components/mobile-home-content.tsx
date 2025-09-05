@@ -251,16 +251,17 @@ export function MobileHomeContent() {
         }}
         user={user}
         onLogin={() => openAuthModal("Please sign in to continue")}
-        onLogout={async () => {
-          try {
-            await logout();
-          } catch (error) {
-            console.error('Logout error:', error)
-          }
-          setSelectedModel(null)
-          setCurrentPhotoSet({})
-          setIsGenerating(false)
-        }}
+    onLogout={async () => {
+      try {
+        await logout();
+      } catch (error) {
+        console.error('Logout error:', error)
+      }
+      setModels([]); // Reset models on logout
+      setSelectedModel(null)
+      setCurrentPhotoSet({})
+      setIsGenerating(false)
+    }}
       />
 
       {/* Mobile Layout */}
@@ -278,8 +279,9 @@ export function MobileHomeContent() {
                 + Add Model
               </Button>
             </div>
-            <ModelGallery 
-              models={models} 
+      <ModelGallery 
+        key={user ? user.id : 'logged-out'}
+        models={models} 
               onSelectModel={isRetrying ? undefined : handleSelectModel} 
               selectedModelId={selectedModel?.id}
               onNavigateToUpload={isRetrying ? undefined : navigateToUpload}

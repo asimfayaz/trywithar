@@ -898,8 +898,8 @@ const updatedModel: ModelData = {
                 ) : (
                   <div className="flex flex-col items-center justify-center flex-1 text-gray-500">
                     <div className="text-center">
-                      <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                        <svg className="w-8 h-8" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                      <div className="w-12 h-12 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                        <svg className="w-6 h-6" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M16 8h-4a8 8 0 0 0-8 8v4" />
                           <path d="M48 8h4a8 8 0 0 1 8 8v4" />
                           <path d="M16 56h-4a8 8 0 0 1-8-8v-4" />
@@ -909,7 +909,7 @@ const updatedModel: ModelData = {
                           <polyline points="32,34 16,25" />
                         </svg>
                       </div>
-                      <h3 className="text-lg font-medium mb-2">No Model Selected</h3>
+                      <h3 className="text-lg mb-2">No Model Selected</h3>
                       <p className="text-sm">Upload a photo to generate a 3D model, or select a model from the gallery</p>
                     </div>
                   </div>

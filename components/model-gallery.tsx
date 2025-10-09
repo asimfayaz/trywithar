@@ -99,7 +99,7 @@ export function ModelGallery({ models, onSelectModel, selectedModelId, onNavigat
                 : "border-transparent hover:border-gray-300",
             )}
             onClick={() => onSelectModel?.(model)}
-            title={`Last updated: ${model.updatedAt.toLocaleString()}`}
+            title={`Last updated: ${model.uploadedAt.toLocaleString()}`}
           >
             <img
               src={model.thumbnail || "/placeholder.svg"}

@@ -1,6 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { ViewState } from '@/contexts/NavigationContext';
+import { useToast } from '@/components/ui/use-toast';
+
 import { ModelGallery } from "@/components/model-gallery"
 import { FileUpload } from "@/components/file-upload"
 import { AuthModal } from "@/components/auth-modal"
@@ -59,6 +63,15 @@ export interface User {
 }
 
 export default function Home() {
+  const navigationRouter = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { toast } = useToast();
+  
+  // Create a stable reference to searchParams
+  const viewParam = searchParams.get('view') as ViewState | null;
+  const modelIdParam = searchParams.get('modelId');
+
   const { 
     user, 
     showAuthModal, 
@@ -70,20 +83,59 @@ export default function Home() {
     closeAuthModal,
     setShowForgotPassword
   } = useAuth();
-  
+
   const [selectedModel, setSelectedModel] = useState<ModelData | null>(null)
   const [currentPhotoSet, setCurrentPhotoSet] = useState<PhotoSet>({})
   const [isGenerating, setIsGenerating] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  
+  const [models, setModels] = useState<ModelData[]>([])
+  const [adminModels, setAdminModels] = useState<ModelData[]>([])
+
+  // Hardcoded admin user ID
+  const adminUserId = "541a43f1-6c11-43a0-8ddb-91563e22c5f7";
+
+  // Initialize from URL parameters
+  useEffect(() => {
+    try {
+      if (viewParam && ['gallery', 'upload', 'generator', 'preview'].includes(viewParam)) {
+        // View state is managed by NavigationContext
+      }
+      
+      if (modelIdParam) {
+        if (models.length === 0) return;
+        
+        const model = models.find(m => m.id === modelIdParam);
+        if (model) {
+          setSelectedModel(model);
+        } else {
+          toast({
+            title: "Model not found",
+            description: "The model you are trying to access does not exist.",
+            variant: "destructive",
+          });
+          
+          // Redirect to gallery
+          navigationRouter.replace(`${pathname}?view=gallery`);
+          setSelectedModel(null);
+        }
+      }
+    } catch (error) {
+      console.error('Error initializing from URL parameters:', error);
+      toast({
+        title: "Initialization error",
+        description: "Failed to initialize from URL parameters.",
+        variant: "destructive",
+      });
+    }
+  }, [viewParam, modelIdParam, models]);
+
   // Create model service instance
   const modelService = new ModelService();
 
   // Check URL parameters for auth modal triggers
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const showAuth = urlParams.get('showAuth');
-    const authMode = urlParams.get('authMode');
+    const showAuth = searchParams.get('showAuth');
+    const authMode = searchParams.get('authMode');
     
     if (showAuth === 'true') {
       openAuthModal();
@@ -91,15 +143,13 @@ export default function Home() {
       if (authMode === 'forgotPassword') {
         setShowForgotPassword(true);
       }
+      
+      // Clear auth params from URL
+      navigationRouter.replace(pathname);
     }
-    
-    if (showAuth || authMode) {
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, document.title, newUrl);
-    }
-  }, []);
+  }, [searchParams]);
   
-  const [models, setModels] = useState<ModelData[]>([])
+  // Removed duplicate state declaration
 
   // Function to load user's photos from database
   const loadUserPhotos = async () => {
@@ -163,6 +213,59 @@ return {
     }
   }, [user])
 
+  // Load admin models when user is not logged in
+  useEffect(() => {
+    const fetchAdminModels = async () => {
+      if (!user) {
+        try {
+          const adminModelsData = await modelService.getModelsByUserId(adminUserId);
+          const modelData: ModelData[] = adminModelsData.map((model: any) => {
+            // Same processing as in loadUserPhotos
+            const statusMap: Record<string, {status: string, processingStage?: ProcessingStage}> = {
+              'draft': { status: 'draft' },
+              'uploading_photos': { status: 'processing', processingStage: 'uploading_photos' },
+              'removing_background': { status: 'processing', processingStage: 'removing_background' },
+              'generating_3d_model': { status: 'processing', processingStage: 'generating_3d_model' },
+              'completed': { status: 'completed', processingStage: 'completed' },
+              'failed': { status: 'failed', processingStage: 'failed' }
+            };
+
+            const mapping = statusMap[model.model_status] || { status: 'failed' };
+            const status = mapping.status as any;
+            const processingStage = mapping.processingStage;
+              
+            return {
+              id: model.id,
+              thumbnail: model.front_image_url || '/placeholder.svg?height=150&width=150',
+              status,
+              modelUrl: model.model_url || undefined,
+              uploadedAt: new Date(model.created_at),
+              updatedAt: new Date(model.updated_at),
+              jobId: model.job_id || undefined,
+              processingStage,
+              photoSet: { 
+                front: {
+                  file: new File([], 'front.jpg'),
+                  dataUrl: model.front_image_url || '/placeholder.svg?height=150&width=150'
+                }
+              },
+              error: undefined
+            }
+          });
+          setAdminModels(modelData);
+        } catch (error) {
+          console.error('Failed to load sample models:', error);
+          toast({
+            title: "Failed to load sample models",
+            description: "Sample models could not be loaded at this time.",
+            variant: "destructive",
+          });
+        }
+      }
+    };
+    fetchAdminModels();
+  }, [user]);
+
   // Real user authentication
   const handleLogin = (user: any) => {
     login(user);
@@ -178,6 +281,15 @@ return {
     setSelectedModel(null)
     setCurrentPhotoSet({})
     setIsGenerating(false)
+  }
+
+  const handleUploadRequest = () => {
+    if (!user) {
+      openAuthModal("Please sign in to upload photos");
+      return;
+    }
+    // Trigger file input click
+    document.getElementById('desktop-file-input')?.click();
   }
 
   const handleUpload = async (file: File, position: keyof PhotoSet = "front") => {
@@ -826,11 +938,19 @@ const updatedModel: ModelData = {
   const isMobile = useIsMobile();
 
   return (
-    <NavigationProvider>
-      {isMobile ? (
-        <MobileHomeContent />
-      ) : (
-        <div className="min-h-screen bg-gray-50">
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading application...</p>
+        </div>
+      </div>
+    }>
+      <NavigationProvider>
+        {isMobile ? (
+          <MobileHomeContent />
+        ) : (
+          <div className="min-h-screen bg-gray-50">
           {/* Header */}
           <header className="bg-white border-b border-gray-200 px-6 py-4">
             <div className="flex items-center justify-between">
@@ -846,17 +966,35 @@ const updatedModel: ModelData = {
             {/* Left Column - Gallery and Upload */}
             <div className="lg:col-span-1 space-y-4 flex flex-col min-h-0">
               {/* Upload Section */}
-              <div className="grid row-span-1 bg-white rounded-lg shadow-sm border border-gray-200 p-6 h-fit">
+              <div className="grid row-span-1 bg-white rounded-lg shadow-sm border border-gray-200 p-6 h-fit" data-testid="upload-view">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Upload Photos</h2>
-                <FileUpload onUpload={(file: File) => handleUpload(file, "front")} disabled={false} />
+                <FileUpload 
+                  onUpload={(file: File) => handleUpload(file, "front")} 
+                  onUploadRequest={handleUploadRequest}
+                  disabled={false} 
+                />
+                <input
+                  id="desktop-file-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      handleUpload(file, "front");
+                    }
+                  }}
+                  className="hidden"
+                />
               </div>
 
               {/* Model Gallery */}
-              <div className="grid row-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex-1 min-h-0">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">Your 3D Models</h2>
+              <div className="grid row-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex-1 min-h-0" data-testid="gallery-view">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                  {user ? "Your 3D Models" : "Sample 3D Models"}
+                </h2>
               <ModelGallery 
                 key={user ? user.id : 'logged-out'}
-                models={models} 
+                models={user ? models : adminModels} 
                 onSelectModel={handleSelectModel} 
                 selectedModelId={selectedModel?.id}
                 onNavigateToUpload={() => {}} 
@@ -872,9 +1010,9 @@ const updatedModel: ModelData = {
 
               <div className="flex-1 min-h-0 flex flex-col">
                 {selectedModel ? (
-                  <div className="flex-1 min-h-0">
+                  <div className="flex-1 min-h-0" data-testid="generator-view">
                     {selectedModel?.status === 'completed' && selectedModel.modelUrl ? (
-                      <ModelPreview modelUrl={selectedModel.modelUrl} photoSet={currentPhotoSet} />
+                      <ModelPreview modelUrl={selectedModel.modelUrl} photoSet={currentPhotoSet} data-testid="preview-view" />
                     ) : (
                       <ModelGenerator
                         photoSet={currentPhotoSet}
@@ -926,8 +1064,9 @@ const updatedModel: ModelData = {
             reason={authReason}
             initialForgotPassword={showForgotPassword}
           />
-        </div>
-      )}
-    </NavigationProvider>
+          </div>
+        )}
+      </NavigationProvider>
+    </Suspense>
   )
 }

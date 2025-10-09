@@ -31,3 +31,21 @@ Continue building your app on:
 
 ## Authentication
 We use Supabase Auth for authentication
+
+## Deep Linking
+
+The application supports deep linking to specific views using URL parameters:
+
+### URL Schema
+- `view`: Specifies the current view (gallery, upload, generator, preview)
+- `modelId`: ID of the selected model (required for generator/preview views)
+
+Example URLs:
+- Gallery view: `https://yourapp.com/?view=gallery`
+- Generator view: `https://yourapp.com/?view=generator&modelId=12345`
+- Preview view: `https://yourapp.com/?view=preview&modelId=12345`
+
+### Implementation Details
+- URL parameters are synchronized with application state using Next.js navigation hooks
+- NavigationContext manages view transitions and parameter updates
+- Invalid model IDs trigger error notifications and redirect to gallery view

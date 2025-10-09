@@ -151,12 +151,20 @@ export async function POST(request: NextRequest) {
     // Store original credits for potential rollback
     originalCredits = userBilling.credits;
     
-    // Log credit usage transaction
+    // Log credit usage transaction with proper authorization
+    const authHeader = request.headers.get('Authorization');
+    const transactionHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    
+    // Only add Authorization header if it exists and is valid
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      transactionHeaders['Authorization'] = authHeader;
+    }
+    
     const transactionResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/transactions`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: transactionHeaders,
       body: JSON.stringify({
         type: 'usage',
         amount: 0, // Currently no monetary value, just credit usage
@@ -217,7 +225,7 @@ export async function POST(request: NextRequest) {
       .eq('id', model.user_id);
     
     return NextResponse.json({
-      job_id: predictionId,
+      job_id: job.id,  // Return the internal UUID job ID instead of external prediction ID
       status: 'queued'
     }, { status: 200 });
     

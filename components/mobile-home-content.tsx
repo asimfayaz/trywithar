@@ -17,7 +17,15 @@ import { ModelService } from "@/lib/supabase/model.service"
 import type { ModelStatus } from "@/lib/supabase/types"
 import type { UploadItem, PhotoSet, ModelData } from "@/app/page"
 
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { ViewState } from '@/contexts/NavigationContext';
+import { useToast } from '@/components/ui/use-toast';
+
 export function MobileHomeContent() {
+  const navigationRouter = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { toast } = useToast();
   const { currentView, navigateToGallery, navigateToUpload, navigateToGenerator, navigateToPreview } = useNavigation();
   const isMobile = useIsMobile();
   const { 
@@ -37,20 +45,62 @@ export function MobileHomeContent() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [models, setModels] = useState<ModelData[]>([])
+  const [adminModels, setAdminModels] = useState<ModelData[]>([])
+  const [isAdminModelsLoading, setIsAdminModelsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
-  const { generateModel, retryModelGeneration, pollJobStatus, isRetrying } = useModelGeneration();
-  const modelService = new ModelService();
-
-  // Add a new useEffect for initial mount:
+  // Initialize from URL parameters
   useEffect(() => {
-    navigateToGallery(); // Set initial view to gallery
-  }, []);
+    const viewParam = searchParams.get('view') as ViewState | null;
+    if (viewParam && ['gallery', 'upload', 'generator', 'preview'].includes(viewParam)) {
+      // View state is managed by NavigationContext
+    }
+    
+    const modelId = searchParams.get('modelId');
+    if (modelId && !isLoading && (!user ? !isAdminModelsLoading : true)) {
+      // Skip validation for temporary models (prefixed with "temp-")
+      if (modelId.startsWith('temp-')) {
+        return;
+      }
+      
+      // Search in appropriate model array based on user state
+      const model = user 
+        ? models.find(m => m.id === modelId)
+        : adminModels.find(m => m.id === modelId);
+        
+      if (model) {
+        setSelectedModel(model);
+      } else {
+        toast({
+          title: "Model not found",
+          description: "The model you are trying to access does not exist.",
+          variant: "destructive",
+        });
+        
+        // Redirect to gallery
+        navigationRouter.replace(`${pathname}?view=gallery`);
+        setSelectedModel(null);
+      }
+    }
+  }, [searchParams, isLoading, models, adminModels, isAdminModelsLoading, user]);
+  
+  // Remove modelService references
+  // All model operations should go through useModelGeneration hook
+  
+  const { 
+    generateModel, 
+    retryModelGeneration, 
+    pollJobStatus, 
+    isRetrying,
+    isInitialized,
+    getModelsByUserId
+  } = useModelGeneration();
 
 
-  // Load user photos
+
+  // Load user photos using useModelGeneration hook
   const loadUserPhotos = async () => {
-    if (!user) {
+    if (!user || !isInitialized) {
       setIsLoading(false);
       return;
     }
@@ -58,7 +108,7 @@ export function MobileHomeContent() {
     try {
       setIsLoading(true);
       setError(null);
-      const modelsData = await modelService.getModelsByUserId(user.id)
+      const modelsData = await getModelsByUserId(user.id);
       modelsData.sort((a: any, b: any) => 
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
@@ -94,14 +144,69 @@ export function MobileHomeContent() {
         }
       })
       
-      setModels(modelData)
+      setModels(modelData);
     } catch (error) {
-      console.error('Failed to load user photos:', error)
-      setError(error instanceof Error ? error.message : 'Failed to load models')
+      console.error('Failed to load user photos:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load models');
     } finally {
       setIsLoading(false);
     }
   }
+
+  // Fetch admin models for logged-out users
+  useEffect(() => {
+    const fetchAdminModels = async () => {
+      if (!user) {
+        try {
+          setIsAdminModelsLoading(true);
+          const modelService = new ModelService();
+          const adminUserId = "541a43f1-6c11-43a0-8ddb-91563e22c5f7";
+          const adminModelsData = await modelService.getModelsByUserId(adminUserId);
+          
+          const modelData: ModelData[] = adminModelsData.map((model: any) => {
+            const statusMap: Record<string, {status: string, processingStage?: ModelStatus}> = {
+              'draft': { status: 'draft' },
+              'uploading_photos': { status: 'processing', processingStage: 'uploading_photos' },
+              'removing_background': { status: 'processing', processingStage: 'removing_background' },
+              'generating_3d_model': { status: 'processing', processingStage: 'generating_3d_model' },
+              'completed': { status: 'completed', processingStage: 'completed' },
+              'failed': { status: 'failed', processingStage: 'failed' }
+            };
+
+            const mapping = statusMap[model.model_status] || { status: 'failed' };
+            
+            return {
+              id: model.id,
+              thumbnail: model.front_image_url || '/placeholder.svg?height=150&width=150',
+              status: mapping.status as any,
+              modelUrl: model.model_url || undefined,
+              uploadedAt: new Date(model.created_at),
+              updatedAt: new Date(model.updated_at),
+              jobId: model.job_id || undefined,
+              processingStage: mapping.processingStage,
+              photoSet: { 
+                front: {
+                  file: new File([], 'front.jpg'),
+                  dataUrl: model.front_image_url || '/placeholder.svg?height=150&width=150'
+                }
+              },
+              error: undefined
+            }
+          });
+          
+          setAdminModels(modelData);
+        } catch (error) {
+          console.error('Failed to load admin models:', error);
+        } finally {
+          setIsAdminModelsLoading(false);
+        }
+      }
+    };
+
+    if (!user) {
+      fetchAdminModels();
+    }
+  }, [user]);
 
   // Load models when component mounts or user changes
   useEffect(() => {
@@ -121,49 +226,14 @@ export function MobileHomeContent() {
     
     setSelectedModel(model)
     
-    try {
-      const modelData = await modelService.getModel(model.id)
-      if (modelData) {
-        const photoSet: PhotoSet = {}
-        
-        if (modelData.front_image_url) {
-          photoSet.front = {
-            file: new File([], 'front.jpg'),
-            dataUrl: modelData.front_image_url
-          }
-        }
-        if (modelData.left_image_url) {
-          photoSet.left = {
-            file: new File([], 'left.jpg'),
-            dataUrl: modelData.left_image_url
-          }
-        }
-        if (modelData.right_image_url) {
-          photoSet.right = {
-            file: new File([], 'right.jpg'),
-            dataUrl: modelData.right_image_url
-          }
-        }
-        if (modelData.back_image_url) {
-          photoSet.back = {
-            file: new File([], 'back.jpg'),
-            dataUrl: modelData.back_image_url
-          }
-        }
-        
-        setCurrentPhotoSet(photoSet)
-      } else {
-        setCurrentPhotoSet(model.photoSet)
-      }
-    } catch (error) {
-      console.error('Failed to load photo data:', error)
-      setCurrentPhotoSet(model.photoSet)
-    }
+    // We can't access modelService directly anymore
+    // For now, we'll just use the existing model data
+    setCurrentPhotoSet(model.photoSet)
     
     if (model.status === "completed" && model.modelUrl) {
-      navigateToPreview();
+      navigateToPreview(model.id);
     } else {
-      navigateToGenerator();
+      navigateToGenerator(model.id);
     }
   }
 
@@ -207,7 +277,14 @@ export function MobileHomeContent() {
 
         setSelectedModel(previewModel);
         setCurrentPhotoSet({ front: uploadItem });
-        navigateToGenerator();
+        navigateToGenerator(previewModel.id);
+        
+        // Show success toast
+        toast({
+          title: "Photo uploaded",
+          description: "Your photo has been uploaded successfully. You can now generate your 3D model.",
+          variant: "default",
+        });
       } else if (selectedModel) {
         const newDataUrl = await new Promise<string>((resolve) => {
           const reader = new FileReader();
@@ -246,6 +323,7 @@ export function MobileHomeContent() {
           } else if (currentView === 'generator') {
             navigateToGallery();
           } else if (currentView === 'preview') {
+            setSelectedModel(null);
             navigateToGallery();
           }
         }}
@@ -267,21 +345,27 @@ export function MobileHomeContent() {
       {/* Mobile Layout */}
       <div className="p-4">
         {currentView === 'gallery' && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6" data-testid="gallery-view">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">Your 3D Models</h2>
+              <h2 className="text-xl font-semibold text-gray-900">{user ? "Your 3D Models" : "Sample 3D Models"}</h2>
               <Button
                 variant="default" 
                 size="sm"
-                onClick={navigateToUpload}
-                disabled={isRetrying}
+                onClick={() => {
+                  if (!user) {
+                    openAuthModal("Please sign in or create an account to upload photos and generate 3D models.");
+                    return;
+                  }
+                  navigateToUpload();
+                }}
+                disabled={isRetrying || !isInitialized}
               >
                 + Add Model
               </Button>
             </div>
       <ModelGallery 
         key={user ? user.id : 'logged-out'}
-        models={models} 
+        models={user ? models : adminModels} 
               onSelectModel={isRetrying ? undefined : handleSelectModel} 
               selectedModelId={selectedModel?.id}
               onNavigateToUpload={isRetrying ? undefined : navigateToUpload}
@@ -294,7 +378,7 @@ export function MobileHomeContent() {
         )}
 
         {currentView === 'upload' && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6" data-testid="upload-view">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold text-gray-900">Upload Photos</h2>
             </div>
@@ -303,7 +387,7 @@ export function MobileHomeContent() {
         )}
 
         {currentView === 'generator' && selectedModel && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6" data-testid="generator-view">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold text-gray-900">3D Model</h2>
               
@@ -338,8 +422,8 @@ export function MobileHomeContent() {
                     result = await generateModel(selectedModel.id, currentPhotoSet, user.id);
                   }
                   
-                  // Navigate to generator view to show processing status
-                  navigateToGenerator();
+                  // Update URL to generator view with model ID
+                  navigateToGenerator(selectedModel.id);
                   
                   // Start polling for job status
                   const storage = new StorageService();
@@ -369,12 +453,6 @@ export function MobileHomeContent() {
                       try {
                         const jobResult = await pollJobStatus(result.jobId);
                         if (jobResult.status === 'completed' && jobResult.modelUrl) {
-                          // Update model in database
-                          await modelService.updateModel(selectedModel.id, {
-                            model_status: 'completed',
-                            model_url: jobResult.modelUrl
-                          });
-                          
                           // Update local state
                           setSelectedModel(prev => prev ? {
                             ...prev,
@@ -386,11 +464,6 @@ export function MobileHomeContent() {
                           // Refresh models list
                           loadUserPhotos();
                         } else if (jobResult.status === 'failed') {
-                          // Update model as failed
-                          await modelService.updateModel(selectedModel.id, {
-                            model_status: 'failed'
-                          });
-                          
                           // Update local state
                           setSelectedModel(prev => prev ? {
                             ...prev,
@@ -401,11 +474,6 @@ export function MobileHomeContent() {
                         }
                       } catch (pollError) {
                         console.error("Job polling failed:", pollError);
-                        // Update model as failed
-                        await modelService.updateModel(selectedModel.id, {
-                          model_status: 'failed'
-                        });
-                        
                         // Update local state
                         setSelectedModel(prev => prev ? {
                           ...prev,
@@ -436,7 +504,7 @@ export function MobileHomeContent() {
         )}
 
         {currentView === 'preview' && selectedModel && selectedModel.modelUrl && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6" data-testid="preview-view">
             <ModelPreview 
               modelUrl={selectedModel.modelUrl} 
               photoSet={currentPhotoSet}
@@ -448,13 +516,14 @@ export function MobileHomeContent() {
       </div>
       
       {/* Auth Modal */}
-      <AuthModal 
-        isOpen={showAuthModal} 
-        onClose={closeAuthModal} 
-        onLogin={handleLogin} 
-        reason={authReason}
-        initialForgotPassword={showForgotPassword}
-      />
+        <AuthModal 
+          isOpen={showAuthModal} 
+          onClose={closeAuthModal} 
+          onLogin={handleLogin} 
+          reason={authReason}
+          initialForgotPassword={showForgotPassword}
+          aria-describedby="auth-dialog-description"
+        />
     </div>
   )
 }

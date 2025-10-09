@@ -8,10 +8,11 @@ import { cn } from "@/lib/utils"
 
 interface FileUploadProps {
   onUpload: (file: File) => void
+  onUploadRequest?: () => void
   disabled?: boolean
 }
 
-export function FileUpload({ onUpload, disabled = false }: FileUploadProps) {
+export function FileUpload({ onUpload, onUploadRequest, disabled = false }: FileUploadProps) {
   const [isDragOver, setIsDragOver] = useState(false)
 
   const handleDragOver = useCallback(
@@ -42,10 +43,26 @@ export function FileUpload({ onUpload, disabled = false }: FileUploadProps) {
       const imageFile = files.find((file) => file.type.startsWith("image/"))
 
       if (imageFile) {
-        onUpload(imageFile)
+        if (onUploadRequest) {
+          // Store the file temporarily and trigger auth check
+          const tempInput = document.createElement('input');
+          tempInput.type = 'file';
+          const dataTransfer = new DataTransfer();
+          dataTransfer.items.add(imageFile);
+          tempInput.files = dataTransfer.files;
+          tempInput.onchange = () => {
+            const file = tempInput.files?.[0];
+            if (file) {
+              onUpload(file);
+            }
+          };
+          onUploadRequest();
+        } else {
+          onUpload(imageFile);
+        }
       }
     },
-    [onUpload, disabled],
+    [onUpload, onUploadRequest, disabled],
   )
 
   const handleFileSelect = useCallback(
@@ -107,11 +124,29 @@ export function FileUpload({ onUpload, disabled = false }: FileUploadProps) {
 
           {!disabled && (
             <div className="space-y-1 flex-shrink-0">
-              <Button asChild size="sm" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium">
-                <label className="cursor-pointer">
-                  <input type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
-                  Upload Front Photo
-                </label>
+              <Button 
+                size="sm" 
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (onUploadRequest) {
+                    onUploadRequest();
+                  } else {
+                    // Fallback to direct upload if no auth check function provided
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.onchange = (e) => {
+                      const file = (e.target as HTMLInputElement).files?.[0];
+                      if (file && file.type.startsWith("image/")) {
+                        onUpload(file);
+                      }
+                    };
+                    input.click();
+                  }
+                }}
+              >
+                Upload Front Photo
               </Button>
 
               <p className="text-xs text-gray-400">JPG, PNG up to 10MB</p>

@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create transaction record
+    // Create transaction record (without status field since it doesn't exist in the schema)
     const { data: transaction, error } = await supabase
       .from('user_transactions')
       .insert([{
@@ -130,8 +130,7 @@ export async function POST(request: NextRequest) {
         type: transactionData.type,
         amount: transactionData.amount,
         credits: transactionData.credits,
-        description: transactionData.description || '',
-        status: transactionData.status || 'completed'
+        description: transactionData.description || ''
       }])
       .select()
 

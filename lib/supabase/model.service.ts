@@ -1,9 +1,35 @@
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import type { ModelStatus } from './types';
 
+// Singleton Supabase client instance
+let supabaseInstance: any = null;
+
 export class ModelService {
+  private static getClient(accessToken?: string) {
+    if (!supabaseInstance) {
+      supabaseInstance = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          global: {
+            headers: {
+              Authorization: accessToken ? `Bearer ${accessToken}` : '',
+            },
+          }
+        }
+      );
+    }
+    return supabaseInstance;
+  }
+
+  constructor(private accessToken?: string) {}
+
+  private get supabase() {
+    return ModelService.getClient(this.accessToken);
+  }
+
   async createDraftModel(userId: string) {
-    const { data, error } = await supabase
+    const { data, error } = await this.supabase
       .from('models')
       .insert({
         user_id: userId,
@@ -17,7 +43,7 @@ export class ModelService {
   }
 
   async getModel(modelId: string) {
-    const { data, error } = await supabase
+    const { data, error } = await this.supabase
       .from('models')
       .select('*')
       .eq('id', modelId)
@@ -28,7 +54,7 @@ export class ModelService {
   }
 
   async updateModelStatus(modelId: string, status: ModelStatus) {
-    const { error } = await supabase
+    const { error } = await this.supabase
       .from('models')
       .update({ model_status: status })
       .eq('id', modelId);
@@ -37,7 +63,7 @@ export class ModelService {
   }
 
   async updateModel(modelId: string, updateData: any) {
-    const { error } = await supabase
+    const { error } = await this.supabase
       .from('models')
       .update(updateData)
       .eq('id', modelId);
@@ -47,7 +73,7 @@ export class ModelService {
 
   // New methods to fix import errors
   async getModelsByUserId(userId: string) {
-    const { data, error } = await supabase
+    const { data, error } = await this.supabase
       .from('models')
       .select('*')
       .eq('user_id', userId);
@@ -57,7 +83,7 @@ export class ModelService {
   }
 
   async getModelsByStatus(status: string) {
-    const { data, error } = await supabase
+    const { data, error } = await this.supabase
       .from('models')
       .select('*')
       .eq('model_status', status);
@@ -67,7 +93,7 @@ export class ModelService {
   }
 
   async createModel(modelData: any) {
-    const { data, error } = await supabase
+    const { data, error } = await this.supabase
       .from('models')
       .insert(modelData)
       .select()
@@ -78,7 +104,7 @@ export class ModelService {
   }
 
   async createJob(jobData: any) {
-    const { data, error } = await supabase
+    const { data, error } = await this.supabase
       .from('jobs')
       .insert(jobData)
       .select()
@@ -86,5 +112,14 @@ export class ModelService {
     
     if (error) throw error;
     return data;
+  }
+
+  async deleteTestModels(): Promise<void> {
+    const { error } = await this.supabase
+      .from('models')
+      .delete()
+      .eq('user_id', 'test-user');
+      
+    if (error) throw new Error(`Failed to delete test models: ${error.message}`);
   }
 }

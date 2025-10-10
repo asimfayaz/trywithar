@@ -11,7 +11,7 @@ import { AuthModal } from "@/components/auth-modal"
 import { UserDashboard } from "@/components/user-dashboard"
 import { ModelGenerator } from "@/components/model-generator"
 import { ModelPreview } from "@/components/model-preview"
-import { NavigationProvider, useNavigation } from "@/contexts/NavigationContext"
+import { NavigationProvider } from "@/contexts/NavigationContext"
 import { MobileHomeContent } from "@/components/mobile-home-content"
 import { useIsMobile } from "@/components/ui/use-mobile"
 import { Logo } from "@/components/logo"
@@ -62,7 +62,8 @@ export interface User {
   created_at?: string
 }
 
-export default function Home() {
+// Separate component for client-side logic to fix Suspense boundary issue
+function HomeContent() {
   const navigationRouter = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -148,8 +149,6 @@ export default function Home() {
       navigationRouter.replace(pathname);
     }
   }, [searchParams]);
-  
-  // Removed duplicate state declaration
 
   // Function to load user's photos from database
   const loadUserPhotos = async () => {
@@ -165,36 +164,36 @@ export default function Home() {
         let status: "draft" | "processing" | "completed" | "failed"
         let processingStage: ProcessingStage | undefined
         
-  const statusMap: Record<string, {status: string, processingStage?: ProcessingStage}> = {
-    'draft': { status: 'draft' },
-    'uploading_photos': { status: 'processing', processingStage: 'uploading_photos' },
-    'removing_background': { status: 'processing', processingStage: 'removing_background' },
-    'generating_3d_model': { status: 'processing', processingStage: 'generating_3d_model' },
-    'completed': { status: 'completed', processingStage: 'completed' },
-    'failed': { status: 'failed', processingStage: 'failed' }
-  };
+        const statusMap: Record<string, {status: string, processingStage?: ProcessingStage}> = {
+          'draft': { status: 'draft' },
+          'uploading_photos': { status: 'processing', processingStage: 'uploading_photos' },
+          'removing_background': { status: 'processing', processingStage: 'removing_background' },
+          'generating_3d_model': { status: 'processing', processingStage: 'generating_3d_model' },
+          'completed': { status: 'completed', processingStage: 'completed' },
+          'failed': { status: 'failed', processingStage: 'failed' }
+        };
 
         const mapping = statusMap[model.model_status] || { status: 'failed' };
         status = mapping.status as any;
         processingStage = mapping.processingStage;
           
-return {
-  id: model.id,
-  thumbnail: model.front_image_url || '/placeholder.svg?height=150&width=150',
-  status,
-  modelUrl: model.model_url || undefined,
-  uploadedAt: new Date(model.created_at),
-  updatedAt: new Date(model.updated_at),
-  jobId: model.job_id || undefined,
-  processingStage,
-  photoSet: { 
-    front: {
-      file: new File([], 'front.jpg'),
-      dataUrl: model.front_image_url || '/placeholder.svg?height=150&width=150'
-    }
-  },
-  error: undefined // Initialize error as undefined
-}
+        return {
+          id: model.id,
+          thumbnail: model.front_image_url || '/placeholder.svg?height=150&width=150',
+          status,
+          modelUrl: model.model_url || undefined,
+          uploadedAt: new Date(model.created_at),
+          updatedAt: new Date(model.updated_at),
+          jobId: model.job_id || undefined,
+          processingStage,
+          photoSet: { 
+            front: {
+              file: new File([], 'front.jpg'),
+              dataUrl: model.front_image_url || '/placeholder.svg?height=150&width=150'
+            }
+          },
+          error: undefined // Initialize error as undefined
+        }
       })
       
       setModels(modelData)
@@ -202,7 +201,6 @@ return {
       console.error('Failed to load user photos:', error)
     }
   }
-
 
   // Load photos when user changes
   useEffect(() => {
@@ -312,17 +310,17 @@ return {
 
       if (position === "front") {
         const tempId = `temp-${Date.now()}`;
-const previewModel: ModelData = {
-  id: tempId,
-  thumbnail: dataUrl,
-  status: "draft",
-  uploadedAt: new Date(),
-  updatedAt: new Date(),
-  photoSet: { front: uploadItem },
-  processingStage: 'uploading_photos',
-  isTemporary: true,
-  error: undefined // Initialize error
-};
+        const previewModel: ModelData = {
+          id: tempId,
+          thumbnail: dataUrl,
+          status: "draft",
+          uploadedAt: new Date(),
+          updatedAt: new Date(),
+          photoSet: { front: uploadItem },
+          processingStage: 'uploading_photos',
+          isTemporary: true,
+          error: undefined // Initialize error
+        };
 
         setSelectedModel(previewModel);
         setCurrentPhotoSet({ front: uploadItem });
@@ -453,14 +451,14 @@ const previewModel: ModelData = {
 
     setIsGenerating(true);
 
-const newModel: ModelData = {
-  ...selectedModel,
-  status: 'processing',
-  processingStage: 'draft',
-  updatedAt: new Date(),
-  isTemporary: false,
-  error: undefined // Reset error when retrying
-};
+    const newModel: ModelData = {
+      ...selectedModel,
+      status: 'processing',
+      processingStage: 'draft',
+      updatedAt: new Date(),
+      isTemporary: false,
+      error: undefined // Reset error when retrying
+    };
 
     setModels(prev => [newModel, ...prev]);
     setSelectedModel(newModel);
@@ -507,24 +505,21 @@ const newModel: ModelData = {
       };
       
       const createdModel = await modelService.createModel(modelRecord);
-const updatedModel: ModelData = {
-  ...selectedModel,
-  id: createdModel.id,
-  isTemporary: false,
-  expiresAt: undefined,
-  jobId,
-  status: 'processing',
-  processingStage: 'uploading_photos',
-  uploadedAt: new Date()
-};
+      const updatedModel: ModelData = {
+        ...selectedModel,
+        id: createdModel.id,
+        isTemporary: false,
+        expiresAt: undefined,
+        jobId,
+        status: 'processing',
+        processingStage: 'uploading_photos',
+        uploadedAt: new Date()
+      };
       
       setModels(prev => prev.map(model => 
         model.id === selectedModel.id ? updatedModel : model
       ));
       setSelectedModel(updatedModel);
-
-      // This duplicate upload call was removed since we already uploaded the front file
-      // in the batch upload above
       
       await modelService.updateModel(createdModel.id, {
         model_status: 'removing_background',
@@ -938,6 +933,132 @@ const updatedModel: ModelData = {
   const isMobile = useIsMobile();
 
   return (
+    <NavigationProvider>
+      {isMobile ? (
+        <MobileHomeContent />
+      ) : (
+        <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <header className="bg-white border-b border-gray-200 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <Logo /><h1 className="text-2xl font-bold text-gray-900 ml-3">Try with AR</h1>
+            </div>
+            <UserDashboard user={user} onLogin={() => openAuthModal("Please sign in to continue")} onLogout={handleLogout} />
+          </div>
+        </header>
+
+        {/* Main Grid Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 md:grid-cols-3 gap-6 p-6 h-[calc(100vh-88px)]">
+          {/* Left Column - Gallery and Upload */}
+          <div className="lg:col-span-1 space-y-4 flex flex-col min-h-0">
+            {/* Upload Section */}
+            <div className="grid row-span-1 bg-white rounded-lg shadow-sm border border-gray-200 p-6 h-fit" data-testid="upload-view">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Upload Photos</h2>
+              <FileUpload 
+                onUpload={(file: File) => handleUpload(file, "front")} 
+                onUploadRequest={handleUploadRequest}
+                disabled={false} 
+              />
+              <input
+                id="desktop-file-input"
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    handleUpload(file, "front");
+                  }
+                }}
+                className="hidden"
+              />
+            </div>
+
+            {/* Model Gallery */}
+            <div className="grid row-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex-1 min-h-0" data-testid="gallery-view">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                {user ? "Your 3D Models" : "Sample 3D Models"}
+              </h2>
+            <ModelGallery 
+              key={user ? user.id : 'logged-out'}
+              models={user ? models : adminModels} 
+              onSelectModel={handleSelectModel} 
+              selectedModelId={selectedModel?.id}
+              onNavigateToUpload={() => {}} 
+            />
+            </div>
+          </div>
+
+          {/* Right Column - Model Viewer */}
+          <div className="lg:col-span-2 md:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-gray-900">3D Model</h2>
+            </div>
+
+            <div className="flex-1 min-h-0 flex flex-col">
+              {selectedModel ? (
+                <div className="flex-1 min-h-0" data-testid="generator-view">
+                  {selectedModel?.status === 'completed' && selectedModel.modelUrl ? (
+                    <ModelPreview modelUrl={selectedModel.modelUrl} photoSet={currentPhotoSet} data-testid="preview-view" />
+                  ) : (
+                    <ModelGenerator
+                      photoSet={currentPhotoSet}
+                      onUpload={(fileOrItem: File | UploadItem, position: keyof PhotoSet) => {
+                        if (fileOrItem instanceof File) {
+                          handleUpload(fileOrItem, position);
+                        } else {
+                          handleUpload(fileOrItem.file, position);
+                        }
+                      }}
+                      onRemove={(position: keyof PhotoSet) => handleRemovePhoto(position)}
+                      onGenerate={handleGenerateModel}
+                      canGenerate={canGenerate}
+                      isGenerating={isGenerating}
+                      processingStage={selectedModel.processingStage}
+                      selectedModel={selectedModel}
+                      errorMessage={selectedModel.status === "failed" ? selectedModel.error : undefined}
+                    />
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center flex-1 text-gray-500">
+                  <div className="text-center">
+                    <div className="w-12 h-12 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                      <svg className="w-6 h-6" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M16 8h-4a8 8 0 0 0-8 8v4" />
+                        <path d="M48 8h4a8 8 0 0 1 8 8v4" />
+                        <path d="M16 56h-4a8 8 0 0 1-8-8v-4" />
+                        <path d="M48 56h4a8 8 0 0 0 8-8v-4" />
+                        <polygon points="32,16 48,25 48,41 32,50 16,41 16,25" />
+                        <polyline points="32,50 32,34 48,25" />
+                        <polyline points="32,34 16,25" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg mb-2">No Model Selected</h3>
+                    <p className="text-sm">Upload a photo to generate a 3D model, or select a model from the gallery</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Auth Modal */}
+        <AuthModal 
+          isOpen={showAuthModal} 
+          onClose={handleCloseAuthModal} 
+          onLogin={handleLogin} 
+          reason={authReason}
+          initialForgotPassword={showForgotPassword}
+        />
+        </div>
+      )}
+    </NavigationProvider>
+  )
+}
+
+export default function Home() {
+  return (
     <Suspense fallback={
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -946,127 +1067,7 @@ const updatedModel: ModelData = {
         </div>
       </div>
     }>
-      <NavigationProvider>
-        {isMobile ? (
-          <MobileHomeContent />
-        ) : (
-          <div className="min-h-screen bg-gray-50">
-          {/* Header */}
-          <header className="bg-white border-b border-gray-200 px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <Logo /><h1 className="text-2xl font-bold text-gray-900 ml-3">Try with AR</h1>
-              </div>
-              <UserDashboard user={user} onLogin={() => openAuthModal("Please sign in to continue")} onLogout={handleLogout} />
-            </div>
-          </header>
-
-          {/* Main Grid Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 md:grid-cols-3 gap-6 p-6 h-[calc(100vh-88px)]">
-            {/* Left Column - Gallery and Upload */}
-            <div className="lg:col-span-1 space-y-4 flex flex-col min-h-0">
-              {/* Upload Section */}
-              <div className="grid row-span-1 bg-white rounded-lg shadow-sm border border-gray-200 p-6 h-fit" data-testid="upload-view">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">Upload Photos</h2>
-                <FileUpload 
-                  onUpload={(file: File) => handleUpload(file, "front")} 
-                  onUploadRequest={handleUploadRequest}
-                  disabled={false} 
-                />
-                <input
-                  id="desktop-file-input"
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      handleUpload(file, "front");
-                    }
-                  }}
-                  className="hidden"
-                />
-              </div>
-
-              {/* Model Gallery */}
-              <div className="grid row-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex-1 min-h-0" data-testid="gallery-view">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                  {user ? "Your 3D Models" : "Sample 3D Models"}
-                </h2>
-              <ModelGallery 
-                key={user ? user.id : 'logged-out'}
-                models={user ? models : adminModels} 
-                onSelectModel={handleSelectModel} 
-                selectedModelId={selectedModel?.id}
-                onNavigateToUpload={() => {}} 
-              />
-              </div>
-            </div>
-
-            {/* Right Column - Model Viewer */}
-            <div className="lg:col-span-2 md:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex flex-col">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900">3D Model</h2>
-              </div>
-
-              <div className="flex-1 min-h-0 flex flex-col">
-                {selectedModel ? (
-                  <div className="flex-1 min-h-0" data-testid="generator-view">
-                    {selectedModel?.status === 'completed' && selectedModel.modelUrl ? (
-                      <ModelPreview modelUrl={selectedModel.modelUrl} photoSet={currentPhotoSet} data-testid="preview-view" />
-                    ) : (
-                      <ModelGenerator
-                        photoSet={currentPhotoSet}
-                        onUpload={(fileOrItem: File | UploadItem, position: keyof PhotoSet) => {
-                          if (fileOrItem instanceof File) {
-                            handleUpload(fileOrItem, position);
-                          } else {
-                            handleUpload(fileOrItem.file, position);
-                          }
-                        }}
-                        onRemove={(position: keyof PhotoSet) => handleRemovePhoto(position)}
-                        onGenerate={handleGenerateModel}
-                        canGenerate={canGenerate}
-                        isGenerating={isGenerating}
-                        processingStage={selectedModel.processingStage}
-                        selectedModel={selectedModel}
-                        errorMessage={selectedModel.status === "failed" ? selectedModel.error : undefined}
-                      />
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center flex-1 text-gray-500">
-                    <div className="text-center">
-                      <div className="w-12 h-12 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                        <svg className="w-6 h-6" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M16 8h-4a8 8 0 0 0-8 8v4" />
-                          <path d="M48 8h4a8 8 0 0 1 8 8v4" />
-                          <path d="M16 56h-4a8 8 0 0 1-8-8v-4" />
-                          <path d="M48 56h4a8 8 0 0 0 8-8v-4" />
-                          <polygon points="32,16 48,25 48,41 32,50 16,41 16,25" />
-                          <polyline points="32,50 32,34 48,25" />
-                          <polyline points="32,34 16,25" />
-                        </svg>
-                      </div>
-                      <h3 className="text-lg mb-2">No Model Selected</h3>
-                      <p className="text-sm">Upload a photo to generate a 3D model, or select a model from the gallery</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Auth Modal */}
-          <AuthModal 
-            isOpen={showAuthModal} 
-            onClose={handleCloseAuthModal} 
-            onLogin={handleLogin} 
-            reason={authReason}
-            initialForgotPassword={showForgotPassword}
-          />
-          </div>
-        )}
-      </NavigationProvider>
+      <HomeContent />
     </Suspense>
   )
 }

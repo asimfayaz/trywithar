@@ -2,31 +2,50 @@
 
 import { useState, useEffect, Suspense } from "react"
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { ViewState } from '@/contexts/NavigationContext';
 import { useToast } from '@/components/ui/use-toast';
 
+// Component imports
 import { ModelGallery } from "@/components/model-gallery"
 import { FileUpload } from "@/components/file-upload"
 import { AuthModal } from "@/components/auth-modal"
 import { UserDashboard } from "@/components/user-dashboard"
 import { ModelGenerator } from "@/components/model-generator"
 import { ModelPreview } from "@/components/model-preview"
-import { NavigationProvider } from "@/contexts/NavigationContext"
 import { MobileHomeContent } from "@/components/mobile-home-content"
-import { useIsMobile } from "@/components/ui/use-mobile"
 import { Logo } from "@/components/logo"
-import { useAuth } from "@/contexts/AuthContext"
 
+// Context imports
+import { NavigationProvider } from "@/contexts/NavigationContext"
+import { useAuth } from "@/contexts/AuthContext"
+import { ViewState } from '@/contexts/NavigationContext';
+
+// Service imports
 import { ModelService } from "@/lib/supabase/model.service"
 import { StorageService } from "@/lib/storage.service"
+
+// Hook imports
+import { useIsMobile } from "@/components/ui/use-mobile"
+import { useModelGeneration } from "@/hooks/useModelGeneration";
+
+// Type imports
 import type { ModelStatus } from "@/lib/supabase/types"
 
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
+/**
+ * Represents a single uploaded file with preview and storage URLs
+ */
 export interface UploadItem {
   file: File;
   dataUrl: string; // Base64 data URL for preview
   persistentUrl?: string; // Persistent URL from R2 storage
 }
 
+/**
+ * Collection of photos for different angles of the subject
+ */
 export interface PhotoSet {
   front?: UploadItem;
   left?: UploadItem;
@@ -34,12 +53,15 @@ export interface PhotoSet {
   back?: UploadItem;
 }
 
-// Align with ModelStatus type
+/**
+ * Processing stage aligned with ModelStatus type
+ */
 type ProcessingStage = ModelStatus;
 
+/**
+ * Complete model data structure including metadata and processing state
+ */
 export interface ModelData {
-  isTemporary?: boolean
-  expiresAt?: Date
   id: string
   thumbnail: string
   status: "draft" | "processing" | "completed" | "failed"
@@ -49,10 +71,15 @@ export interface ModelData {
   jobId?: string | null
   processingStage?: ModelStatus | undefined
   photoSet: PhotoSet
-  sourcePhotoId?: string;
-  error?: string; // Add error property for failed state
+  sourcePhotoId?: string
+  error?: string
+  isTemporary?: boolean // Indicates if model is a temporary draft
+  expiresAt?: Date // Expiration date for temporary models
 }
 
+/**
+ * User profile data structure
+ */
 export interface User {
   id: string
   name?: string | null
@@ -62,17 +89,106 @@ export interface User {
   created_at?: string
 }
 
-// Separate component for client-side logic to fix Suspense boundary issue
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+// Admin user ID for displaying sample models to logged-out users
+const ADMIN_USER_ID = "541a43f1-6c11-43a0-8ddb-91563e22c5f7"
+
+// Maximum retry attempts for job status checks
+const MAX_STATUS_CHECK_RETRIES = 5
+
+// Delay between retry attempts (milliseconds)
+const STATUS_CHECK_RETRY_DELAY = 2000
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Converts database model status to UI model status
+ */
+function mapModelStatus(dbStatus: string): {
+  status: "draft" | "processing" | "completed" | "failed"
+  processingStage?: ProcessingStage
+} {
+  const statusMap: Record<string, {
+    status: "draft" | "processing" | "completed" | "failed"
+    processingStage?: ProcessingStage
+  }> = {
+    'draft': { status: 'draft' },
+    'uploading_photos': { status: 'processing', processingStage: 'uploading_photos' },
+    'removed_background': { status: 'processing', processingStage: 'removed_background' },
+    'generating_3d_model': { status: 'processing', processingStage: 'generating_3d_model' },
+    'completed': { status: 'completed', processingStage: 'completed' },
+    'failed': { status: 'failed', processingStage: 'failed' }
+  }
+
+  return statusMap[dbStatus] || { status: 'failed' }
+}
+
+/**
+ * Transforms database model data to UI ModelData format
+ */
+function transformModelData(model: any): ModelData {
+  const mapping = mapModelStatus(model.model_status)
+  
+  return {
+    id: model.id,
+    thumbnail: model.front_image_url || model.front_nobgr_image_url || '/placeholder.svg?height=150&width=150',
+    status: mapping.status,
+    modelUrl: model.model_url || undefined,
+    uploadedAt: new Date(model.created_at),
+    updatedAt: new Date(model.updated_at),
+    jobId: model.job_id || undefined,
+    processingStage: mapping.processingStage,
+    photoSet: { 
+      front: {
+        file: new File([], 'front.jpg'),
+        dataUrl: model.front_image_url || model.front_nobgr_image_url || '/placeholder.svg?height=150&width=150'
+      }
+    },
+    error: undefined
+  }
+}
+
+/**
+ * Converts a File to a base64 data URL
+ */
+async function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
+
+/**
+ * Main home content component that handles 3D model generation workflow
+ * Separated from Home component to work properly with Next.js Suspense
+ */
 function HomeContent() {
+  // ============================================================================
+  // HOOKS & ROUTER
+  // ============================================================================
+  
   const navigationRouter = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   
-  // Create a stable reference to searchParams
+  // Extract URL parameters
   const viewParam = searchParams.get('view') as ViewState | null;
   const modelIdParam = searchParams.get('modelId');
 
+  // Authentication context
   const { 
     user, 
     showAuthModal, 
@@ -85,39 +201,71 @@ function HomeContent() {
     setShowForgotPassword
   } = useAuth();
 
+  // Model generation hook
+  const { 
+    uploadRawPhotos,
+    removeBackground,
+    generate3DModel
+  } = useModelGeneration();
+
+  // ============================================================================
+  // STATE MANAGEMENT
+  // ============================================================================
+
+  // Currently selected model being viewed/edited
   const [selectedModel, setSelectedModel] = useState<ModelData | null>(null)
+  
+  // Current photo set being worked on
   const [currentPhotoSet, setCurrentPhotoSet] = useState<PhotoSet>({})
+  
+  // Generation and loading states
   const [isGenerating, setIsGenerating] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const [models, setModels] = useState<ModelData[]>([])
-  const [adminModels, setAdminModels] = useState<ModelData[]>([])
+  
+  // Model collections
+  const [models, setModels] = useState<ModelData[]>([]) // User's models
+  const [adminModels, setAdminModels] = useState<ModelData[]>([]) // Sample models for logged-out users
 
-  // Hardcoded admin user ID
-  const adminUserId = "541a43f1-6c11-43a0-8ddb-91563e22c5f7";
+  // ============================================================================
+  // SERVICE INSTANCES
+  // ============================================================================
 
-  // Initialize from URL parameters
+  const modelService = new ModelService();
+  const storageService = new StorageService();
+
+  // ============================================================================
+  // URL PARAMETER INITIALIZATION
+  // ============================================================================
+
+  /**
+   * Initialize component state from URL parameters
+   * Handles view state and model selection on page load
+   */
   useEffect(() => {
     try {
+      // View parameter is handled by NavigationContext
       if (viewParam && ['gallery', 'upload', 'generator', 'preview'].includes(viewParam)) {
         // View state is managed by NavigationContext
       }
       
+      // Handle model ID parameter
       if (modelIdParam) {
-        if (models.length === 0) return;
+        // Wait for models to load before selecting
+        if (models.length === 0) return
         
-        const model = models.find(m => m.id === modelIdParam);
+        const model = models.find(m => m.id === modelIdParam)
         if (model) {
-          setSelectedModel(model);
+          setSelectedModel(model)
         } else {
+          // Model not found - show error and redirect
           toast({
             title: "Model not found",
             description: "The model you are trying to access does not exist.",
             variant: "destructive",
-          });
+          })
           
-          // Redirect to gallery
-          navigationRouter.replace(`${pathname}?view=gallery`);
-          setSelectedModel(null);
+          navigationRouter.replace(`${pathname}?view=gallery`)
+          setSelectedModel(null)
         }
       }
     } catch (error) {
@@ -130,10 +278,14 @@ function HomeContent() {
     }
   }, [viewParam, modelIdParam, models]);
 
-  // Create model service instance
-  const modelService = new ModelService();
+  // ============================================================================
+  // AUTH MODAL HANDLING
+  // ============================================================================
 
-  // Check URL parameters for auth modal triggers
+  /**
+   * Check URL parameters for auth modal triggers
+   * Allows deep linking to auth modal with specific modes
+   */
   useEffect(() => {
     const showAuth = searchParams.get('showAuth');
     const authMode = searchParams.get('authMode');
@@ -145,142 +297,118 @@ function HomeContent() {
         setShowForgotPassword(true);
       }
       
-      // Clear auth params from URL
+      // Clear auth params from URL after opening modal
       navigationRouter.replace(pathname);
     }
   }, [searchParams]);
 
-  // Function to load user's photos from database
+  // ============================================================================
+  // DATA LOADING
+  // ============================================================================
+
+  /**
+   * Load user's photos from database
+   * Fetches and transforms all models belonging to the current user
+   */
   const loadUserPhotos = async () => {
     if (!user) return
     
     try {
       const modelsData = await modelService.getModelsByUserId(user.id)
+      
+      // Sort by creation date (newest first)
       modelsData.sort((a: any, b: any) => 
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
+      )
       
-      const modelData: ModelData[] = modelsData.map((model: any) => {
-        let status: "draft" | "processing" | "completed" | "failed"
-        let processingStage: ProcessingStage | undefined
-        
-        const statusMap: Record<string, {status: string, processingStage?: ProcessingStage}> = {
-          'draft': { status: 'draft' },
-          'uploading_photos': { status: 'processing', processingStage: 'uploading_photos' },
-          'removed_background': { status: 'processing', processingStage: 'removed_background' },
-          'generating_3d_model': { status: 'processing', processingStage: 'generating_3d_model' },
-          'completed': { status: 'completed', processingStage: 'completed' },
-          'failed': { status: 'failed', processingStage: 'failed' }
-        };
-
-        const mapping = statusMap[model.model_status] || { status: 'failed' };
-        status = mapping.status as any;
-        processingStage = mapping.processingStage;
-          
-        return {
-          id: model.id,
-          thumbnail: model.front_image_url || model.front_nobgr_image_url || '/placeholder.svg?height=150&width=150',
-          status,
-          modelUrl: model.model_url || undefined,
-          uploadedAt: new Date(model.created_at),
-          updatedAt: new Date(model.updated_at),
-          jobId: model.job_id || undefined,
-          processingStage,
-          photoSet: { 
-            front: {
-              file: new File([], 'front.jpg'),
-              dataUrl: model.front_image_url || model.front_nobgr_image_url || '/placeholder.svg?height=150&width=150'
-            }
-          },
-          error: undefined // Initialize error as undefined
-        }
-      })
+      // Transform database models to UI format
+      const modelData: ModelData[] = modelsData.map(transformModelData)
       
       setModels(modelData)
     } catch (error) {
       console.error('Failed to load user photos:', error)
+      toast({
+        title: "Failed to load models",
+        description: "Could not load your models. Please try refreshing the page.",
+        variant: "destructive",
+      })
     }
-  }
+  };
 
-  // Load photos when user changes
+  /**
+   * Load user's models when user changes
+   * Clears models when user logs out
+   */
   useEffect(() => {
     if (user) {
       loadUserPhotos()
     } else {
       setModels([])
     }
-  }, [user])
+  }, [user]);
 
-  // Load admin models when user is not logged in
+  /**
+   * Load admin models for display when user is not logged in
+   * Shows sample models to demonstrate the application
+   */
   useEffect(() => {
     const fetchAdminModels = async () => {
       if (!user) {
         try {
-          const adminModelsData = await modelService.getModelsByUserId(adminUserId);
-          const modelData: ModelData[] = adminModelsData.map((model: any) => {
-            // Same processing as in loadUserPhotos
-            const statusMap: Record<string, {status: string, processingStage?: ProcessingStage}> = {
-              'draft': { status: 'draft' },
-              'uploading_photos': { status: 'processing', processingStage: 'uploading_photos' },
-              'removed_background': { status: 'processing', processingStage: 'removed_background' },
-              'generating_3d_model': { status: 'processing', processingStage: 'generating_3d_model' },
-              'completed': { status: 'completed', processingStage: 'completed' },
-              'failed': { status: 'failed', processingStage: 'failed' }
-            };
-
-            const mapping = statusMap[model.model_status] || { status: 'failed' };
-            const status = mapping.status as any;
-            const processingStage = mapping.processingStage;
-              
-            return {
-              id: model.id,
-              thumbnail: model.front_image_url || '/placeholder.svg?height=150&width=150',
-              status,
-              modelUrl: model.model_url || undefined,
-              uploadedAt: new Date(model.created_at),
-              updatedAt: new Date(model.updated_at),
-              jobId: model.job_id || undefined,
-              processingStage,
-              photoSet: { 
-                front: {
-                  file: new File([], 'front.jpg'),
-                  dataUrl: model.front_image_url || '/placeholder.svg?height=150&width=150'
-                }
-              },
-              error: undefined
-            }
-          });
-          setAdminModels(modelData);
+          const adminModelsData = await modelService.getModelsByUserId(ADMIN_USER_ID)
+          const modelData: ModelData[] = adminModelsData.map(transformModelData)
+          setAdminModels(modelData)
         } catch (error) {
-          console.error('Failed to load sample models:', error);
+          console.error('Failed to load sample models:', error)
           toast({
             title: "Failed to load sample models",
             description: "Sample models could not be loaded at this time.",
             variant: "destructive",
-          });
+          })
         }
       }
-    };
-    fetchAdminModels();
+    }
+    
+    fetchAdminModels()
   }, [user]);
 
-  // Real user authentication
+  // ============================================================================
+  // AUTHENTICATION HANDLERS
+  // ============================================================================
+
+  /**
+   * Handle user login
+   */
   const handleLogin = (user: any) => {
-    login(user);
-  }
+    login(user)
+  };
 
   const handleLogout = async () => {
     try {
-      await logout();
+      await logout()
+      // Clear all user data
+      setModels([])
+      setSelectedModel(null)
+      setCurrentPhotoSet({})
+      setIsGenerating(false)
     } catch (error) {
       console.error('Logout error:', error)
+      toast({
+        title: "Logout failed",
+        description: "An error occurred during logout. Please try again.",
+        variant: "destructive",
+      })
     }
-    setModels([]); // Reset models on logout
-    setSelectedModel(null)
-    setCurrentPhotoSet({})
-    setIsGenerating(false)
-  }
+  };
 
+  // ============================================================================
+  // FILE UPLOAD HANDLERS
+  // ============================================================================
+
+  /**
+   * Handle request to upload file
+   * Checks authentication before allowing upload
+   */
   const handleUploadRequest = () => {
     if (!user) {
       openAuthModal("Please sign in to upload photos");
@@ -290,6 +418,10 @@ function HomeContent() {
     document.getElementById('desktop-file-input')?.click();
   }
 
+  /**
+   * Handle file upload for a specific position
+   * Creates preview and updates state
+   */
   const handleUpload = async (file: File, position: keyof PhotoSet = "front") => {
     if (!user) {
       openAuthModal("You need to sign in to upload photos");
@@ -297,11 +429,8 @@ function HomeContent() {
     }
 
     try {
-      const dataUrl = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.readAsDataURL(file);
-      });
+      // Convert file to data URL for preview
+      const dataUrl = await fileToDataUrl(file);
       
       const uploadItem: UploadItem = {
         file,
@@ -324,19 +453,20 @@ function HomeContent() {
 
         setSelectedModel(previewModel);
         setCurrentPhotoSet({ front: uploadItem });
-      } else if (selectedModel) {
-        const newDataUrl = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
+      }
+      // Handle additional angle uploads (updates existing model)
+      else if (selectedModel) {
+        const newDataUrl = await fileToDataUrl(file);
         
         const newUploadItem: UploadItem = {
           file,
           dataUrl: newDataUrl
         };
         
+        // Update photo set
         setCurrentPhotoSet(prev => ({ ...prev, [position]: newUploadItem }));
+
+        // Update selected model
         setSelectedModel(prev => prev ? 
           { 
             ...prev, 
@@ -346,9 +476,14 @@ function HomeContent() {
         );
       }
     } catch (error) {
-      console.error(`❌ Error storing ${position} photo draft:`, error);
-      alert(`Failed to store ${position} photo. Please try again.`);
+      console.error(`❌ Error storing ${position} photo draft:`, error)
+      toast({
+        title: "Upload failed",
+        description: `Failed to store ${position} photo. Please try again.`,
+        variant: "destructive",
+      })
       
+      // Cleanup on error
       if (position === "front") {
         setSelectedModel(null);
         setCurrentPhotoSet({});
@@ -362,18 +497,24 @@ function HomeContent() {
     }
   }
 
+  /**
+   * Remove a photo from a specific position
+   * Front image cannot be removed as it's required
+   */
   const handleRemovePhoto = (position: keyof PhotoSet) => {
     if (position === "front") {
       alert("Front image is required and cannot be removed.")
       return
     }
 
+    // Remove from current photo set
     setCurrentPhotoSet((prev) => {
       const newSet = { ...prev }
       delete newSet[position]
       return newSet
     })
 
+    // Remove from selected model
     if (selectedModel) {
       const updatedPhotoSet = { ...selectedModel.photoSet }
       delete updatedPhotoSet[position]
@@ -381,6 +522,14 @@ function HomeContent() {
     }
   }
 
+  // ============================================================================
+  // MODEL SELECTION
+  // ============================================================================
+
+  /**
+   * Handle selecting a model from the gallery
+   * Loads full photo set data from database
+   */
   const handleSelectModel = async (model: ModelData) => {
     if (selectedModel?.isTemporary) {
       const storage = new StorageService();
@@ -394,8 +543,10 @@ function HomeContent() {
     setSelectedModel(model)
     
     try {
+      // Fetch full model data including all photos
       const modelData = await modelService.getModel(model.id)
       if (modelData) {
+        // Build complete photo set from database URLs
         const photoSet: PhotoSet = {}
         
         if (modelData.front_image_url) {
@@ -425,6 +576,7 @@ function HomeContent() {
         
         setCurrentPhotoSet(photoSet)
       } else {
+        // Fallback to model's existing photo set
         setCurrentPhotoSet(model.photoSet)
       }
     } catch (error) {
@@ -433,7 +585,16 @@ function HomeContent() {
     }
   }
 
+  // ============================================================================
+  // MODEL GENERATION
+  // ============================================================================
+
+  /**
+   * Main handler for 3D model generation
+   * Orchestrates the multi-step generation process
+   */
   const handleGenerateModel = async () => {
+    // Validation checks
     if (!user) {
       openAuthModal("Please sign in to generate 3D models.");
       return;
@@ -451,13 +612,14 @@ function HomeContent() {
 
     setIsGenerating(true);
 
+    // Create processing model entry
     const newModel: ModelData = {
       ...selectedModel,
       status: 'processing',
       processingStage: 'draft',
       updatedAt: new Date(),
       isTemporary: false,
-      error: undefined // Reset error when retrying
+      error: undefined
     };
 
     setModels(prev => [newModel, ...prev]);
@@ -466,27 +628,19 @@ function HomeContent() {
     let jobId: string | null = null;
 
     try {
-      // Use the new separated workflow - we need to get the hook functions properly
-      // Since we're in a component, we should use the hook directly
-      const { 
-        uploadRawPhotos,
-        removeBackground,
-        generate3DModel
-      } = useModelGeneration();
-      
       const modelId = selectedModel.id;
-      
+
       // Step 1: Upload raw photos
       const urlMap = await uploadRawPhotos(modelId, currentPhotoSet);
-      
+
       // Step 2: Remove background (using the front URL)
       const processedUrl = await removeBackground(modelId, urlMap.front);
-      
+
       // Step 3: Generate 3D model
       const result = await generate3DModel(modelId, processedUrl, currentPhotoSet);
       jobId = result.jobId;
-
-      // Update UI with job ID and processing stage
+      
+      // Update UI with job information
       setModels(prev => prev.map(model => 
         model.id === modelId 
           ? { 
@@ -496,6 +650,7 @@ function HomeContent() {
             } 
           : model
       ));
+
       setSelectedModel(prev => {
         if (!prev || prev.id !== modelId) return prev;
         return {
@@ -505,17 +660,22 @@ function HomeContent() {
         };
       });
 
+      // Start polling for job completion
       if (jobId) {
         checkJobStatusWithRetry(modelId, jobId);
       } else {
         throw new Error('Job ID is missing after creating job');
       }
       
-      const storageService = new StorageService();
+      // Cleanup expired drafts
       await storageService.deleteExpiredDrafts();
 
     } catch (error) {
       console.error('❌ Error during model generation:', error);
+
+      // Update model to failed state
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate model'
+      
       
       setModels((prev) =>
         prev.map((model) =>
@@ -524,7 +684,7 @@ function HomeContent() {
                 ...model, 
                 status: "failed", 
                 processingStage: 'failed',
-                error: error instanceof Error ? error.message : 'Failed to generate model'
+                error: errorMessage
               } 
             : model,
         ),
@@ -536,7 +696,7 @@ function HomeContent() {
               ...prev, 
               status: "failed", 
               processingStage: 'failed',
-              error: error instanceof Error ? error.message : 'Failed to generate model'
+              error: errorMessage
             } 
           : prev
       );
@@ -557,42 +717,40 @@ function HomeContent() {
     }
   }
 
-  // Function to check job status with retry logic
-  const checkJobStatusWithRetry = async (photoId: string, jobId: string, attempt = 0) => {
+  // ============================================================================
+  // JOB STATUS POLLING
+  // ============================================================================
+
+  /**
+   * Check job status with retry logic
+   * Polls API until job completes or fails
+   */
+  const checkJobStatusWithRetry = async (
+    photoId: string, 
+    jobId: string, 
+    attempt = 0
+  ) => {
     try {
       const response = await fetch(`/api/status?job_id=${encodeURIComponent(jobId)}`);
       
+      // Handle job not found
       if (response.status === 404) {
         await modelService.updateModel(photoId, {
           model_status: 'failed'
         });
         
-        setModels(prev => prev.map(model => 
-          model.jobId === jobId ? {
-            ...model,
-            status: 'failed',
-            processingStage: 'failed',
-            error: 'Job not found'
-          } : model
-        ));
-        
-        if (selectedModel?.jobId === jobId) {
-          setSelectedModel(prev => prev ? {
-            ...prev,
-            status: 'failed',
-            processingStage: 'failed',
-            error: 'Job not found'
-          } : prev);
-        }
+        updateModelStatus(jobId, 'failed', 'Job not found')
         return;
       }
       
+      // Handle API errors
       if (!response.ok) {
         throw new Error(`API returned ${response.status}`);
       }
       
       const statusData = await response.json();
       
+      // Handle completed job
       if (statusData.status === 'completed' && statusData.model_urls?.glb) {
         await modelService.updateModel(photoId, {
           model_status: 'completed',
@@ -616,62 +774,70 @@ function HomeContent() {
             processingStage: undefined
           } : prev);
         }
-      } else if (statusData.status === 'failed') {
+      }
+      // Handle failed job
+      else if (statusData.status === 'failed') {
         await modelService.updateModel(photoId, {
           model_status: 'failed'
         });
         
-        setModels(prev => prev.map(model => 
-          model.jobId === jobId ? {
-            ...model,
-            status: 'failed',
-            processingStage: 'failed',
-            error: 'Model generation failed'
-          } : model
-        ));
-        
-        if (selectedModel?.jobId === jobId) {
-          setSelectedModel(prev => prev ? {
-            ...prev,
-            status: 'failed',
-            processingStage: 'failed',
-            error: 'Model generation failed'
-          } : prev);
-        }
+        updateModelStatus(jobId, 'failed', 'Model generation failed');
+      }
+      // Job still processing - continue polling
+      else {
+        // Continue checking status
+        setTimeout(() => checkJobStatusWithRetry(photoId, jobId, attempt), 3000)
       }
     } catch (error) {
       console.error('Error checking job status:', error);
       
-      if (attempt < 5) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        return checkJobStatusWithRetry(photoId, jobId, attempt + 1);
+      // Retry if under max attempts
+      if (attempt < MAX_STATUS_CHECK_RETRIES) {
+        await new Promise(resolve => setTimeout(resolve, STATUS_CHECK_RETRY_DELAY))
+        return checkJobStatusWithRetry(photoId, jobId, attempt + 1)
       } else {
-        setModels(prev => prev.map(model => 
-          model.jobId === jobId ? {
-            ...model,
-            status: 'failed',
-            processingStage: 'failed',
-            error: 'Failed to check job status'
-          } : model
-        ));
-        
-        if (selectedModel?.jobId === jobId) {
-          setSelectedModel(prev => prev ? {
-            ...prev,
-            status: 'failed',
-            processingStage: 'failed',
-            error: 'Failed to check job status'
-          } : prev);
-        }
+        // Max retries reached - mark as failed
+        updateModelStatus(jobId, 'failed', 'Failed to check job status')
       }
     }
   };
-  
-  // Function to check status for all processing photos
+
+  /**
+   * Helper to update model status in state
+   */
+  const updateModelStatus = (
+    jobId: string, 
+    status: 'failed', 
+    error: string
+  ) => {
+    setModels(prev => prev.map(model => 
+      model.jobId === jobId ? {
+        ...model,
+        status,
+        processingStage: 'failed',
+        error
+      } : model
+    ))
+    
+    if (selectedModel?.jobId === jobId) {
+      setSelectedModel(prev => prev ? {
+        ...prev,
+        status,
+        processingStage: 'failed',
+        error
+      } : prev)
+    }
+  }
+
+  /**
+   * Check status for all processing models
+   * Used on initial load to resume monitoring
+   */
   const checkAllProcessingPhotos = async () => {
     try {
       const statuses = ['photos_uploaded', 'removed_background', 'generating_3d_model'] as const;
       let processingModels: any[] = [];
+
       for (const status of statuses) {
         const models = await modelService.getModelsByStatus(status);
         processingModels = [...processingModels, ...models];
@@ -687,10 +853,17 @@ function HomeContent() {
     }
   };
 
-  // Check for processing jobs on initial load
+  // ============================================================================
+  // LIFECYCLE EFFECTS
+  // ============================================================================
+
+  /**
+   * Check for processing jobs on initial load
+   */
   useEffect(() => {
     const checkJobs = async () => {
       try {
+        // Job checking logic here
       } catch (error) {
         console.error('Error checking processing jobs:', error);
       } finally {
@@ -698,7 +871,10 @@ function HomeContent() {
       }
     };
 
-    const hasProcessingModels = models.some(model => model.status === 'processing' && model.jobId);
+    const hasProcessingModels = models.some(model =>
+      model.status === 'processing' && model.jobId
+    );
+
     if (hasProcessingModels) {
       checkJobs();
     } else {
@@ -706,19 +882,9 @@ function HomeContent() {
     }
   }, [models]);
 
-  // Real-time updates for models
-  useEffect(() => {
-    if (!user) return;
-
-    // TODO: Implement real-time updates using AuthContext
-    // This will be handled by the AuthContext or a separate service
-
-    return () => {
-      // Cleanup real-time subscription
-    };
-  }, [user]);
-
-  // Update selected model when models are updated
+  /**
+   * Update selected model when models array changes
+   */
   useEffect(() => {
     if (selectedModel) {
       const updatedModel = models.find(model => model.id === selectedModel.id);
@@ -728,14 +894,18 @@ function HomeContent() {
     }
   }, [models]);
 
-  // Check for processing jobs and photos on initial load
+  /**
+   * Check for processing jobs when user logs in
+   */
   useEffect(() => {
     if (user) {
       checkAllProcessingPhotos();
     }
   }, [user]);
   
-  // Cleanup on tab close
+  /**
+   * Cleanup temporary models on tab close
+   */
   useEffect(() => {
     const handleBeforeUnload = async () => {
       if (selectedModel?.isTemporary) {
@@ -754,7 +924,9 @@ function HomeContent() {
     };
   }, [selectedModel]);
   
-  // Check status when selected model changes
+  /**
+   * Check status when selected model changes
+   */
   useEffect(() => {
     if (selectedModel?.jobId && selectedModel.status === 'processing') {
       const photoId = models.find(m => m.id === selectedModel.id)?.id;
@@ -764,28 +936,45 @@ function HomeContent() {
     }
   }, [selectedModel?.id]);
   
-  // Function to refresh user credit data
+  /**
+   * Refresh user credits (placeholder for AuthContext integration)
+   */
   const refreshUserCredits = async () => {
-    // This will be handled by the AuthContext
     // TODO: Implement credit refresh in AuthContext
   };
 
-  // Refresh credits on initial load
+  /**
+   * Refresh credits on initial load
+   */
   useEffect(() => {
     if (user) {
       refreshUserCredits();
     }
   }, []);
 
+  // ============================================================================
+  // COMPUTED VALUES
+  // ============================================================================
+
+
   const handleCloseAuthModal = () => {
     closeAuthModal();
   }
 
   const hasPhotos = Object.keys(currentPhotoSet).length > 0
-  const photoControlsDisabled = selectedModel?.status === "processing" || selectedModel?.status === "completed" || selectedModel?.status === "failed";
-  const canGenerate = currentPhotoSet.front && !isGenerating && selectedModel?.status !== "processing" && selectedModel?.status !== "failed";
+  const photoControlsDisabled = 
+    selectedModel?.status === "processing" ||
+    selectedModel?.status === "completed" ||
+    selectedModel?.status === "failed";
+  const canGenerate = 
+    currentPhotoSet.front &&
+    !isGenerating &&
+    selectedModel?.status !== "processing" &&
+    selectedModel?.status !== "failed";
 
-  const isMobile = useIsMobile();
+  // ============================================================================
+  // RENDER
+  // ============================================================================
 
   return (
     <NavigationProvider>
@@ -793,20 +982,25 @@ function HomeContent() {
         <MobileHomeContent />
       ) : (
         <div className="min-h-screen bg-gray-50">
-        {/* Header */}
+        {/* ===== HEADER ===== */}
         <header className="bg-white border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               <Logo /><h1 className="text-2xl font-bold text-gray-900 ml-3">Try with AR</h1>
             </div>
-            <UserDashboard user={user} onLogin={() => openAuthModal("Please sign in to continue")} onLogout={handleLogout} />
+            <UserDashboard
+              user={user}
+              onLogin={() => openAuthModal("Please sign in to continue")}
+              onLogout={handleLogout} />
           </div>
         </header>
 
-        {/* Main Grid Layout */}
+        {/* ===== MAIN GRID LAYOUT ===== */}
         <div className="grid grid-cols-1 lg:grid-cols-3 md:grid-cols-3 gap-6 p-6 h-[calc(100vh-88px)]">
-          {/* Left Column - Gallery and Upload */}
+          
+          {/* ===== LEFT COLUMN - Gallery and Upload ===== */}
           <div className="lg:col-span-1 space-y-4 flex flex-col min-h-0">
+            
             {/* Upload Section */}
             <div className="grid row-span-1 bg-white rounded-lg shadow-sm border border-gray-200 p-6 h-fit" data-testid="upload-view">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Upload Photos</h2>
@@ -815,6 +1009,7 @@ function HomeContent() {
                 onUploadRequest={handleUploadRequest}
                 disabled={false} 
               />
+              {/* Hidden file input for desktop */}
               <input
                 id="desktop-file-input"
                 type="file"
@@ -844,7 +1039,7 @@ function HomeContent() {
             </div>
           </div>
 
-          {/* Right Column - Model Viewer */}
+          {/* ===== RIGHT COLUMN - Model Viewer ===== */}
           <div className="lg:col-span-2 md:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold text-gray-900">3D Model</h2>
@@ -853,9 +1048,14 @@ function HomeContent() {
             <div className="flex-1 min-h-0 flex flex-col">
               {selectedModel ? (
                 <div className="flex-1 min-h-0" data-testid="generator-view">
+                  {/* Show preview if model is completed */}
                   {selectedModel?.status === 'completed' && selectedModel.modelUrl ? (
-                    <ModelPreview modelUrl={selectedModel.modelUrl} photoSet={currentPhotoSet} data-testid="preview-view" />
+                    <ModelPreview
+                    modelUrl={selectedModel.modelUrl}
+                    photoSet={currentPhotoSet}
+                    data-testid="preview-view" />
                   ) : (
+                    /* Show generator for draft/processing/failed models */
                     <ModelGenerator
                       photoSet={currentPhotoSet}
                       onUpload={(fileOrItem: File | UploadItem, position: keyof PhotoSet) => {
@@ -876,9 +1076,11 @@ function HomeContent() {
                   )}
                 </div>
               ) : (
+                /* Empty state when no model is selected */
                 <div className="flex flex-col items-center justify-center flex-1 text-gray-500">
                   <div className="text-center">
                     <div className="w-12 h-12 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                      {/* 3D cube icon */}
                       <svg className="w-6 h-6" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M16 8h-4a8 8 0 0 0-8 8v4" />
                         <path d="M48 8h4a8 8 0 0 1 8 8v4" />
@@ -898,7 +1100,7 @@ function HomeContent() {
           </div>
         </div>
 
-        {/* Auth Modal */}
+        {/* ===== AUTH MODAL ===== */}
         <AuthModal 
           isOpen={showAuthModal} 
           onClose={handleCloseAuthModal} 
@@ -912,6 +1114,14 @@ function HomeContent() {
   )
 }
 
+// ============================================================================
+// EXPORTED COMPONENT WITH SUSPENSE BOUNDARY
+// ============================================================================
+
+/**
+ * Main Home component with Suspense boundary
+ * Wraps HomeContent to handle Next.js async routing
+ */
 export default function Home() {
   return (
     <Suspense fallback={

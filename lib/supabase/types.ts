@@ -1,7 +1,8 @@
 export type ModelStatus = 
   | 'draft'
   | 'uploading_photos'
-  | 'removing_background'
+  | 'photos_uploaded'
+  | 'removed_background'
   | 'generating_3d_model'
   | 'completed'
   | 'failed';

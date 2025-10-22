@@ -1,5 +1,6 @@
 import { removeBackground } from '@imgly/background-removal';
 import { Config } from '@imgly/background-removal';
+import { validateFile } from './fileValidation';
 
 type BackgroundRemovalResult = {
   blob: Blob;
@@ -17,6 +18,12 @@ export async function removeBackgroundFromImage(
 ): Promise<BackgroundRemovalResult> {
   try {
     console.log('Starting client-side background removal for:', file.name);
+    
+    // Validate file before processing using our utility
+    const validation = validateFile(file);
+    if (!validation.isValid) {
+      throw new Error(`Invalid file for background removal: ${validation.error || 'Unknown error'}`);
+    }
     
     // Original upload removed - already handled by batch upload
     
@@ -49,17 +56,19 @@ export async function removeBackgroundFromImage(
     };
   } catch (error) {
     console.error('Background removal failed:', error);
-    throw new Error(
-      error instanceof Error 
-        ? error.message 
-        : 'Failed to remove background from image'
-    );
+    const errorMessage = error instanceof Error ? error.message : 'Failed to remove background from image';
+    throw new Error(`Background removal failed: ${errorMessage}`);
   }
 }
 
 export async function uploadOriginalImageToR2(
   file: File
 ): Promise<{ url: string }> {
+  // Add validation to prevent remote URL uploads
+  if (!(file instanceof File)) {
+    throw new Error("Cannot upload remote URLs - only File objects accepted");
+  }
+  
   const formData = new FormData();
   formData.append('file', file);
   formData.append('processed', 'false');

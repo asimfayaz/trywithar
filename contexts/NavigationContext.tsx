@@ -1,18 +1,20 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 
+// Type alias
 export type ViewState = 'gallery' | 'upload' | 'generator' | 'preview'
 
+// Context interface
 interface NavigationContextType {
   currentView: ViewState
+  currentModelId: string | null
   navigateToGallery: () => void
   navigateToUpload: () => void
   navigateToGenerator: (modelId: string) => void
   navigateToPreview: (modelId: string) => void
 }
-
+// Context creation and usage hook
 const NavigationContext = createContext<NavigationContextType | null>(null)
-
 export const useNavigation = () => {
   const context = useContext(NavigationContext)
   if (!context) {
@@ -21,38 +23,42 @@ export const useNavigation = () => {
   return context
 }
 
-/**
- * Provides navigation context for deep linking functionality
- * Synchronizes view state with URL parameters:
- * - `view`: Current view (gallery, upload, generator, preview)
- * - `modelId`: ID of selected model (for generator/preview views)
- */
+// Provider component
 export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+
+   // State variables and initial values
   const [currentView, setCurrentView] = useState<ViewState>('gallery')
+  const [currentModelId, setCurrentModelId] = useState<string | null>(null)
+  const navigationInProgress = useRef(false)
   
-  // Initialize from URL parameters
+  // UseEffect hook to initialize state from URL parameters
   useEffect(() => {
+    if (navigationInProgress.current) return;
+
     const viewParam = searchParams.get('view') as ViewState | null
+    const modelIdParam = searchParams.get('modelId')
+    
     if (viewParam && ['gallery', 'upload', 'generator', 'preview'].includes(viewParam)) {
       setCurrentView(viewParam)
     }
+    
+    if (modelIdParam) {
+      setCurrentModelId(modelIdParam)
+    } else {
+      setCurrentModelId(null)
+    }
   }, [searchParams])
 
-  // Create URL with query parameters
-  /**
-   * Creates URL with query parameters for deep linking
-   * @param view - The target view
-   * @param modelId - Optional model ID for generator/preview views
-   * @returns URL string with query parameters
-   */
+  
+  // Helper function to create URL with query parameters for deep linking
   const createUrl = (view: ViewState, modelId?: string) => {
     const params = new URLSearchParams(searchParams.toString())
     params.set('view', view)
     
-    if (modelId) {
+    if (modelId && !modelId.startsWith('temp-')) {
       params.set('modelId', modelId)
     } else {
       params.delete('modelId')
@@ -63,28 +69,69 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // Navigation functions
   const navigateToGallery = () => {
+    if (navigationInProgress.current) return;
+    navigationInProgress.current = true;
+    
     router.push(createUrl('gallery'))
     setCurrentView('gallery')
+    setCurrentModelId(null)
+    
+    // Reset navigation flag after a short delay
+    setTimeout(() => {
+      navigationInProgress.current = false;
+    }, 100)
   }
   
   const navigateToUpload = () => {
+    if (navigationInProgress.current) return;
+    navigationInProgress.current = true;
+    
     router.push(createUrl('upload'))
     setCurrentView('upload')
+    setCurrentModelId(null)
+    
+    // Reset navigation flag after a short delay
+    setTimeout(() => {
+      navigationInProgress.current = false;
+    }, 100)
   }
   
   const navigateToGenerator = (modelId: string) => {
+    //if (navigationInProgress.current) return;
+    navigationInProgress.current = true;
+    
+    // Ensure we set the modelId before navigating to avoid race conditions
+    setCurrentModelId(modelId);
     router.push(createUrl('generator', modelId))
     setCurrentView('generator')
+    
+    // Reset navigation flag after a short delay
+    //setTimeout(() => {
+      navigationInProgress.current = false;
+    //}, 100)
   }
   
   const navigateToPreview = (modelId: string) => {
+    if (navigationInProgress.current) return;
+    navigationInProgress.current = true;
+    
     router.push(createUrl('preview', modelId))
     setCurrentView('preview')
+    setCurrentModelId(modelId)
+    
+    // Reset navigation flag after a short delay
+    setTimeout(() => {
+      navigationInProgress.current = false;
+    }, 100)
   }
+
+  // Add a method to check if navigation is in progress
+  const isNavigating = () => navigationInProgress.current;
 
   return (
     <NavigationContext.Provider value={{
       currentView,
+      currentModelId,
       navigateToGallery,
       navigateToUpload,
       navigateToGenerator,

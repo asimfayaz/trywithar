@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { ModelGallery } from "@/components/model-gallery"
 import { FileUpload } from "@/components/file-upload"
 import { ModelGenerator } from "@/components/model-generator"
@@ -14,6 +14,7 @@ import { AuthModal } from "@/components/auth-modal"
 import { StorageService } from "@/lib/storage.service"
 import { useModelGeneration } from "@/hooks/useModelGeneration"
 import { ModelService } from "@/lib/supabase/model.service"
+import { supabase } from "@/lib/supabase"
 import type { ModelStatus } from "@/lib/supabase/types"
 import type { UploadItem, PhotoSet, ModelData } from "@/app/page"
 
@@ -48,55 +49,24 @@ export function MobileHomeContent() {
   const [adminModels, setAdminModels] = useState<ModelData[]>([])
   const [isAdminModelsLoading, setIsAdminModelsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  
-  // Initialize from URL parameters
-  useEffect(() => {
-    const viewParam = searchParams.get('view') as ViewState | null;
-    if (viewParam && ['gallery', 'upload', 'generator', 'preview'].includes(viewParam)) {
-      // View state is managed by NavigationContext
-    }
-    
-    const modelId = searchParams.get('modelId');
-    if (modelId && !isLoading && (!user ? !isAdminModelsLoading : true)) {
-      // Skip validation for temporary models (prefixed with "temp-")
-      if (modelId.startsWith('temp-')) {
-        return;
-      }
-      
-      // Search in appropriate model array based on user state
-      const model = user 
-        ? models.find(m => m.id === modelId)
-        : adminModels.find(m => m.id === modelId);
-        
-      if (model) {
-        setSelectedModel(model);
-      } else {
-        toast({
-          title: "Model not found",
-          description: "The model you are trying to access does not exist.",
-          variant: "destructive",
-        });
-        
-        // Redirect to gallery
-        navigationRouter.replace(`${pathname}?view=gallery`);
-        setSelectedModel(null);
-      }
-    }
-  }, [searchParams, isLoading, models, adminModels, isAdminModelsLoading, user]);
+  const [isProcessingUpload, setIsProcessingUpload] = useState(false)
+  const navigationInProgress = useRef(false)
   
   // Remove modelService references
   // All model operations should go through useModelGeneration hook
-  
   const { 
-    generateModel, 
+    uploadRawPhotos,
+    removeBackground,
+    generate3DModel,
     retryModelGeneration, 
     pollJobStatus, 
-    isRetrying,
+    createModelDraft,
+    isGenerating: isGeneratingHook,
     isInitialized,
     getModelsByUserId
   } = useModelGeneration();
-
-
+  
+  const [isRetrying, setIsRetrying] = useState(false);
 
   // Load user photos using useModelGeneration hook
   const loadUserPhotos = async () => {
@@ -117,7 +87,7 @@ export function MobileHomeContent() {
         const statusMap: Record<string, {status: string, processingStage?: ModelStatus}> = {
           'draft': { status: 'draft' },
           'uploading_photos': { status: 'processing', processingStage: 'uploading_photos' },
-          'removing_background': { status: 'processing', processingStage: 'removing_background' },
+          'removed_background': { status: 'processing', processingStage: 'removed_background' },
           'generating_3d_model': { status: 'processing', processingStage: 'generating_3d_model' },
           'completed': { status: 'completed', processingStage: 'completed' },
           'failed': { status: 'failed', processingStage: 'failed' }
@@ -125,21 +95,47 @@ export function MobileHomeContent() {
 
         const mapping = statusMap[model.model_status] || { status: 'failed' };
         
+        // Create a proper photoSet with actual file handling
+        const photoSet: PhotoSet = {};
+        
+        // Only create photoSet entries if we have actual image URLs
+        if (model.front_image_url) {
+          photoSet.front = {
+            file: new File([], 'front.jpg'), // This is a placeholder - will be replaced with actual file when needed
+            dataUrl: model.front_image_url
+          };
+        }
+        
+        // Add other views if they exist
+        if (model.left_image_url) {
+          photoSet.left = {
+            file: new File([], 'left.jpg'),
+            dataUrl: model.left_image_url
+          };
+        }
+        if (model.right_image_url) {
+          photoSet.right = {
+            file: new File([], 'right.jpg'),
+            dataUrl: model.right_image_url
+          };
+        }
+        if (model.back_image_url) {
+          photoSet.back = {
+            file: new File([], 'back.jpg'),
+            dataUrl: model.back_image_url
+          };
+        }
+        
         return {
           id: model.id,
-          thumbnail: model.front_image_url || '/placeholder.svg?height=150&width=150',
+          thumbnail: model.front_image_url || model.front_nobgr_image_url || '/placeholder.svg?height=150&width=150',
           status: mapping.status as any,
           modelUrl: model.model_url || undefined,
           uploadedAt: new Date(model.created_at),
           updatedAt: new Date(model.updated_at),
           jobId: model.job_id || undefined,
           processingStage: mapping.processingStage,
-          photoSet: { 
-            front: {
-              file: new File([], 'front.jpg'),
-              dataUrl: model.front_image_url || '/placeholder.svg?height=150&width=150'
-            }
-          },
+          photoSet: photoSet,
           error: undefined
         }
       })
@@ -167,7 +163,7 @@ export function MobileHomeContent() {
             const statusMap: Record<string, {status: string, processingStage?: ModelStatus}> = {
               'draft': { status: 'draft' },
               'uploading_photos': { status: 'processing', processingStage: 'uploading_photos' },
-              'removing_background': { status: 'processing', processingStage: 'removing_background' },
+              'removed_background': { status: 'processing', processingStage: 'removed_background' },
               'generating_3d_model': { status: 'processing', processingStage: 'generating_3d_model' },
               'completed': { status: 'completed', processingStage: 'completed' },
               'failed': { status: 'failed', processingStage: 'failed' }
@@ -177,7 +173,7 @@ export function MobileHomeContent() {
             
             return {
               id: model.id,
-              thumbnail: model.front_image_url || '/placeholder.svg?height=150&width=150',
+              thumbnail: model.front_image_url || model.front_nobgr_image_url || '/placeholder.svg?height=150&width=150',
               status: mapping.status as any,
               modelUrl: model.model_url || undefined,
               uploadedAt: new Date(model.created_at),
@@ -187,7 +183,7 @@ export function MobileHomeContent() {
               photoSet: { 
                 front: {
                   file: new File([], 'front.jpg'),
-                  dataUrl: model.front_image_url || '/placeholder.svg?height=150&width=150'
+                  dataUrl: model.front_image_url || model.front_nobgr_image_url || '/placeholder.svg?height=150&width=150'
                 }
               },
               error: undefined
@@ -242,6 +238,21 @@ export function MobileHomeContent() {
     login(user);
   }
 
+  // Get access token from Supabase session
+  const getAccessToken = async () => {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error) {
+        console.error('Error getting session:', error);
+        return null;
+      }
+      return session?.access_token || null;
+    } catch (error) {
+      console.error('Error getting access token:', error);
+      return null;
+    }
+  }
+
   // Handle upload
   const handleUpload = async (file: File, position: keyof PhotoSet = "front") => {
     if (!user) {
@@ -275,9 +286,22 @@ export function MobileHomeContent() {
           error: undefined
         };
 
+        setIsProcessingUpload(true);
         setSelectedModel(previewModel);
         setCurrentPhotoSet({ front: uploadItem });
+        
         navigateToGenerator(previewModel.id);
+        setIsProcessingUpload(false);
+
+        // Use requestAnimationFrame to ensure state updates happen before navigation
+        // requestAnimationFrame(() => {
+        //   navigateToGenerator(previewModel.id);
+        // });
+        
+        // Reset the upload processing flag after a short delay to allow navigation to complete
+        // setTimeout(() => {
+        //   setIsProcessingUpload(false);
+        // }, 1000);
         
         // Show success toast
         toast({
@@ -311,6 +335,9 @@ export function MobileHomeContent() {
       alert(`Failed to store ${position} photo. Please try again.`);
     }
   }
+
+  // Remove modelService references
+  // All model operations should go through useModelGeneration hook
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -412,77 +439,170 @@ export function MobileHomeContent() {
                   
                   setIsGenerating(true);
                   
+                  let modelId: string;
+                  let isRetry = false;
+                  
                   // Check if this is a retry for a failed model
-                  let result;
                   if (selectedModel.status === "failed" && selectedModel.id) {
-                    // Use retry function for failed models
-                    result = await retryModelGeneration(selectedModel.id, user.id);
+                    isRetry = true;
+                    modelId = selectedModel.id;
                   } else {
-                    // Use regular generate function for new models
-                    result = await generateModel(selectedModel.id, currentPhotoSet, user.id);
-                  }
-                  
-                  // Update URL to generator view with model ID
-                  navigateToGenerator(selectedModel.id);
-                  
-                  // Start polling for job status
-                  const storage = new StorageService();
-                  
-                  // Clean up temporary models
-                  if (selectedModel.isTemporary) {
-                    await storage.deleteDraft(selectedModel.id);
-                  }
-                  
-                  // Update the selected model with the job ID and processing status
-                  if (selectedModel) {
+                    // Create new draft model record immediately
+                    modelId = await createModelDraft(user.id);
+                    
+                    // Update selected model with new ID and draft status
                     setSelectedModel(prev => prev ? {
                       ...prev,
-                      jobId: result.jobId,
+                      id: modelId,
+                      status: "draft",
+                      processingStage: 'draft'
+                    } : null);
+                  }
+                  
+                  if (isRetry) {
+                    // Use retry logic - this should NOT upload raw photos again
+                    console.log("Starting retry for model:", modelId);
+                    const retryResult = await retryModelGeneration(modelId, user.id, await getAccessToken() || undefined);
+                    
+                    // Update the selected model with the job ID and processing status
+                    setSelectedModel(prev => prev ? {
+                      ...prev,
+                      jobId: retryResult.jobId,
                       status: "processing",
                       processingStage: 'generating_3d_model',
                       error: undefined // Clear any previous errors
                     } : null);
-                  }
-                  
-                  // Start polling for job status
-                  console.log("Started job with ID:", result.jobId);
-                  
-                  // Poll for job completion
-                  if (result.jobId) {
-                    setTimeout(async () => {
-                      try {
-                        const jobResult = await pollJobStatus(result.jobId);
-                        if (jobResult.status === 'completed' && jobResult.modelUrl) {
-                          // Update local state
-                          setSelectedModel(prev => prev ? {
-                            ...prev,
-                            status: "completed",
-                            modelUrl: jobResult.modelUrl,
-                            processingStage: 'completed'
-                          } : null);
-                          
-                          // Refresh models list
-                          loadUserPhotos();
-                        } else if (jobResult.status === 'failed') {
+                    
+                    // Start polling for job status
+                    console.log("Started retry job with ID:", retryResult.jobId);
+                    
+                    // Poll for job completion
+                    if (retryResult.jobId) {
+                      setTimeout(async () => {
+                        try {
+                          const jobResult = await pollJobStatus(retryResult.jobId);
+                          if (jobResult.status === 'completed' && jobResult.modelUrl) {
+                            // Update local state
+                            setSelectedModel(prev => prev ? {
+                              ...prev,
+                              status: "completed",
+                              modelUrl: jobResult.modelUrl,
+                              processingStage: 'completed'
+                            } : null);
+                            
+                            // Refresh models list
+                            loadUserPhotos();
+                          } else if (jobResult.status === 'failed') {
+                            // Update local state
+                            setSelectedModel(prev => prev ? {
+                              ...prev,
+                              status: "failed",
+                              processingStage: 'failed',
+                              error: jobResult.errorMessage || 'Model generation failed'
+                            } : null);
+                          }
+                        } catch (pollError) {
+                          console.error("Job polling failed:", pollError);
                           // Update local state
                           setSelectedModel(prev => prev ? {
                             ...prev,
                             status: "failed",
                             processingStage: 'failed',
-                            error: jobResult.errorMessage || 'Model generation failed'
+                            error: 'Model generation failed'
                           } : null);
+                          
+                          // Show user-friendly error message
+                          toast({
+                            title: "Generation Failed",
+                            description: "There was an issue generating your 3D model. Please try again.",
+                            variant: "destructive",
+                          });
                         }
-                      } catch (pollError) {
-                        console.error("Job polling failed:", pollError);
-                        // Update local state
-                        setSelectedModel(prev => prev ? {
-                          ...prev,
-                          status: "failed",
-                          processingStage: 'failed',
-                          error: 'Model generation failed'
-                        } : null);
-                      }
-                    }, 1000);
+                      }, 1000);
+                    }
+                  } else {
+                    // Normal generation flow - upload photos and generate
+                    console.log("Starting new generation for model:", modelId);
+                    // Now proceed with the new workflow
+                    // Step 1: Upload raw photos
+                    const urlMap = await uploadRawPhotos(modelId, currentPhotoSet);
+                    
+                    // Step 2: Remove background (using the front URL)
+                    const processedUrl = await removeBackground(modelId, urlMap.front);
+                    
+                    // Step 3: Generate 3D model
+                    const result = await generate3DModel(modelId, processedUrl, currentPhotoSet, await getAccessToken() || undefined);
+                    
+                    // Update URL to generator view with model ID
+                    navigateToGenerator(modelId);
+                    
+                    // Start polling for job status
+                    const storage = new StorageService();
+                    
+                    // Clean up temporary models
+                    if (selectedModel.isTemporary) {
+                      await storage.deleteDraft(selectedModel.id);
+                    }
+                    
+                    // Update the selected model with the job ID and processing status
+                    if (selectedModel) {
+                      setSelectedModel(prev => prev ? {
+                        ...prev,
+                        id: modelId,
+                        jobId: result.jobId,
+                        status: "processing",
+                        processingStage: 'generating_3d_model',
+                        error: undefined // Clear any previous errors
+                      } : null);
+                    }
+                    
+                    // Start polling for job status
+                    console.log("Started job with ID:", result.jobId);
+                    
+                    // Poll for job completion
+                    if (result.jobId) {
+                      setTimeout(async () => {
+                        try {
+                          const jobResult = await pollJobStatus(result.jobId);
+                          if (jobResult.status === 'completed' && jobResult.modelUrl) {
+                            // Update local state
+                            setSelectedModel(prev => prev ? {
+                              ...prev,
+                              status: "completed",
+                              modelUrl: jobResult.modelUrl,
+                              processingStage: 'completed'
+                            } : null);
+                            
+                            // Refresh models list
+                            loadUserPhotos();
+                          } else if (jobResult.status === 'failed') {
+                            // Update local state
+                            setSelectedModel(prev => prev ? {
+                              ...prev,
+                              status: "failed",
+                              processingStage: 'failed',
+                              error: jobResult.errorMessage || 'Model generation failed'
+                            } : null);
+                          }
+                        } catch (pollError) {
+                          console.error("Job polling failed:", pollError);
+                          // Update local state
+                          setSelectedModel(prev => prev ? {
+                            ...prev,
+                            status: "failed",
+                            processingStage: 'failed',
+                            error: 'Model generation failed'
+                          } : null);
+                          
+                          // Show user-friendly error message
+                          toast({
+                            title: "Generation Failed",
+                            description: "There was an issue generating your 3D model. Please try again.",
+                            variant: "destructive",
+                          });
+                        }
+                      }, 1000);
+                    }
                   }
                   
                 } catch (error) {

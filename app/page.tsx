@@ -167,7 +167,7 @@ function HomeContent() {
         const statusMap: Record<string, {status: string, processingStage?: ProcessingStage}> = {
           'draft': { status: 'draft' },
           'uploading_photos': { status: 'processing', processingStage: 'uploading_photos' },
-          'removing_background': { status: 'processing', processingStage: 'removing_background' },
+          'removed_background': { status: 'processing', processingStage: 'removed_background' },
           'generating_3d_model': { status: 'processing', processingStage: 'generating_3d_model' },
           'completed': { status: 'completed', processingStage: 'completed' },
           'failed': { status: 'failed', processingStage: 'failed' }
@@ -179,7 +179,7 @@ function HomeContent() {
           
         return {
           id: model.id,
-          thumbnail: model.front_image_url || '/placeholder.svg?height=150&width=150',
+          thumbnail: model.front_image_url || model.front_nobgr_image_url || '/placeholder.svg?height=150&width=150',
           status,
           modelUrl: model.model_url || undefined,
           uploadedAt: new Date(model.created_at),
@@ -189,7 +189,7 @@ function HomeContent() {
           photoSet: { 
             front: {
               file: new File([], 'front.jpg'),
-              dataUrl: model.front_image_url || '/placeholder.svg?height=150&width=150'
+              dataUrl: model.front_image_url || model.front_nobgr_image_url || '/placeholder.svg?height=150&width=150'
             }
           },
           error: undefined // Initialize error as undefined
@@ -222,7 +222,7 @@ function HomeContent() {
             const statusMap: Record<string, {status: string, processingStage?: ProcessingStage}> = {
               'draft': { status: 'draft' },
               'uploading_photos': { status: 'processing', processingStage: 'uploading_photos' },
-              'removing_background': { status: 'processing', processingStage: 'removing_background' },
+              'removed_background': { status: 'processing', processingStage: 'removed_background' },
               'generating_3d_model': { status: 'processing', processingStage: 'generating_3d_model' },
               'completed': { status: 'completed', processingStage: 'completed' },
               'failed': { status: 'failed', processingStage: 'failed' }
@@ -466,174 +466,29 @@ function HomeContent() {
     let jobId: string | null = null;
 
     try {
-      const frontFile = currentPhotoSet.front?.file;
-      if (!frontFile) throw new Error('Front draft file not found');
+      // Use the new separated workflow - we need to get the hook functions properly
+      // Since we're in a component, we should use the hook directly
+      const { 
+        uploadRawPhotos,
+        removeBackground,
+        generate3DModel
+      } = useModelGeneration();
       
-      const otherViews = ['left', 'right', 'back'] as const;
+      const modelId = selectedModel.id;
       
-      // Upload original photos for all views
-      const { uploadOriginalImageToR2 } = await import('@/lib/backgroundRemoval');
-      const uploadPromises = [];
+      // Step 1: Upload raw photos
+      const urlMap = await uploadRawPhotos(modelId, currentPhotoSet);
       
-      // Upload front photo
-      uploadPromises.push(uploadOriginalImageToR2(frontFile).then(result => {
-        return { position: 'front', url: result.url };
-      }));
+      // Step 2: Remove background (using the front URL)
+      const processedUrl = await removeBackground(modelId, urlMap.front);
       
-      // Upload other views
-      for (const view of otherViews) {
-        const uploadItem = currentPhotoSet[view as keyof PhotoSet];
-        if (uploadItem) {
-          uploadPromises.push(uploadOriginalImageToR2(uploadItem.file).then(result => {
-            return { position: view, url: result.url };
-          }));
-        }
-      }
-      
-      // Wait for all uploads to complete
-      const uploadResults = await Promise.all(uploadPromises);
-      
-      // Create a map of URLs by position
-      const urlMap: Record<string, string> = {};
-      for (const result of uploadResults) {
-        urlMap[result.position] = result.url;
-      }
+      // Step 3: Generate 3D model
+      const result = await generate3DModel(modelId, processedUrl, currentPhotoSet);
+      jobId = result.jobId;
 
-      const modelRecord = {
-        user_id: user.id,
-        model_status: 'draft' as const,
-      };
-      
-      const createdModel = await modelService.createModel(modelRecord);
-      const updatedModel: ModelData = {
-        ...selectedModel,
-        id: createdModel.id,
-        isTemporary: false,
-        expiresAt: undefined,
-        jobId,
-        status: 'processing',
-        processingStage: 'uploading_photos',
-        uploadedAt: new Date()
-      };
-      
+      // Update UI with job ID and processing stage
       setModels(prev => prev.map(model => 
-        model.id === selectedModel.id ? updatedModel : model
-      ));
-      setSelectedModel(updatedModel);
-      
-      await modelService.updateModel(createdModel.id, {
-        model_status: 'removing_background',
-        front_image_url: urlMap.front,
-        ...(urlMap.left && { left_image_url: urlMap.left }),
-        ...(urlMap.right && { right_image_url: urlMap.right }),
-        ...(urlMap.back && { back_image_url: urlMap.back })
-      });
-
-      setSelectedModel(prev => {
-        if (!prev || prev.id !== createdModel.id) return prev;
-        return {
-          ...prev,
-          processingStage: 'removing_background'
-        };
-      });
-
-      let bgResult;
-      try {
-        const { removeBackgroundFromImage } = await import('@/lib/backgroundRemoval');
-        bgResult = await removeBackgroundFromImage(frontFile, {
-          debug: process.env.NODE_ENV === 'development'
-        });
-      } catch (bgError) {
-        console.error('❌ Background removal failed:', bgError);
-        await modelService.updateModel(createdModel.id, {
-          model_status: 'failed'
-        });
-        throw new Error(bgError instanceof Error ? 
-          `Background removal failed: ${bgError.message}` : 
-          'Background removal failed');
-      }
-
-      const presignedRes = await fetch('/api/generate-upload-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          fileName: 'processed.png',
-          contentType: 'image/png',
-          prefix: 'nobgr'
-        })
-      });
-
-      if (!presignedRes.ok) {
-        const errorData = await presignedRes.json();
-        throw new Error(`Failed to get upload URL: ${errorData.message}`);
-      }
-
-      const { presignedUrl, key } = await presignedRes.json();
-      const uploadRes = await fetch(presignedUrl, {
-        method: 'PUT',
-        body: bgResult.blob,
-        headers: { 'Content-Type': 'image/png' }
-      });
-
-      if (!uploadRes.ok) {
-        throw new Error('Direct upload to R2 failed');
-      }
-
-      const r2 = await import('@/lib/r2');
-      const publicUrl = r2.r2Service.getPublicUrl('photos', key);
-
-      await modelService.updateModel(createdModel.id, {
-        model_status: 'removing_background',
-        front_nobgr_image_url: publicUrl
-      });
-      
-      // Skip the photos_uploaded stage
-      setSelectedModel(prev => {
-        if (!prev || prev.id !== createdModel.id) return prev;
-        return {
-          ...prev,
-          processingStage: 'generating_3d_model'
-        };
-      });
-
-      // Send pre-uploaded URLs instead of file objects
-      const formData = new FormData();
-      formData.append('frontUrl', publicUrl); // Use the background-removed URL for front
-      
-      // Add URLs for other views if they exist
-      if (currentPhotoSet.left?.persistentUrl) {
-        formData.append('leftUrl', currentPhotoSet.left.persistentUrl);
-      }
-      if (currentPhotoSet.right?.persistentUrl) {
-        formData.append('rightUrl', currentPhotoSet.right.persistentUrl);
-      }
-      if (currentPhotoSet.back?.persistentUrl) {
-        formData.append('backUrl', currentPhotoSet.back.persistentUrl);
-      }
-      
-      formData.append('options', JSON.stringify({
-        enable_pbr: true,
-        should_remesh: true,
-        should_texture: true
-      }));
-      
-      formData.append('modelId', createdModel.id);
-      
-      const response = await fetch('/api/generate', {
-        method: 'POST',
-        body: formData,
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Job creation failed');
-      }
-      
-      const jobResponse = await response.json();
-      jobId = jobResponse.job_id;
-      
-      setModels(prev => prev.map(model => 
-        model.id === createdModel.id 
+        model.id === modelId 
           ? { 
               ...model, 
               jobId: jobId || undefined,
@@ -642,7 +497,7 @@ function HomeContent() {
           : model
       ));
       setSelectedModel(prev => {
-        if (!prev || prev.id !== createdModel.id) return prev;
+        if (!prev || prev.id !== modelId) return prev;
         return {
           ...prev,
           jobId: jobId || undefined,
@@ -651,7 +506,7 @@ function HomeContent() {
       });
 
       if (jobId) {
-        checkJobStatusWithRetry(createdModel.id, jobId);
+        checkJobStatusWithRetry(modelId, jobId);
       } else {
         throw new Error('Job ID is missing after creating job');
       }
@@ -815,7 +670,7 @@ function HomeContent() {
   // Function to check status for all processing photos
   const checkAllProcessingPhotos = async () => {
     try {
-      const statuses = ['photos_uploaded', 'removing_background', 'generating_3d_model'] as const;
+      const statuses = ['photos_uploaded', 'removed_background', 'generating_3d_model'] as const;
       let processingModels: any[] = [];
       for (const status of statuses) {
         const models = await modelService.getModelsByStatus(status);

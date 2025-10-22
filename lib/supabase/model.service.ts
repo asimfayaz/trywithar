@@ -13,7 +13,9 @@ export class ModelService {
         {
           global: {
             headers: {
-              Authorization: accessToken ? `Bearer ${accessToken}` : '',
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {})
             },
           }
         }
@@ -40,6 +42,32 @@ export class ModelService {
     
     if (error) throw error;
     return data;
+  }
+
+  async createModelWithStatus(userId: string, status: ModelStatus) {
+    const { data, error } = await this.supabase
+      .from('models')
+      .insert({
+        user_id: userId,
+        model_status: status
+      })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  }
+
+  async updateModelStatusWithTimestamp(modelId: string, status: ModelStatus) {
+    const { error } = await this.supabase
+      .from('models')
+      .update({ 
+        model_status: status,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', modelId);
+    
+    if (error) throw error;
   }
 
   async getModel(modelId: string) {
@@ -77,6 +105,27 @@ export class ModelService {
       .from('models')
       .select('*')
       .eq('user_id', userId);
+    
+    if (error) throw error;
+    return data;
+  }
+
+  async getModelByJobId(jobId: string) {
+    const { data, error } = await this.supabase
+      .from('models')
+      .select('*')
+      .eq('job_id', jobId);
+    
+    if (error) throw error;
+    return data && data.length > 0 ? data[0] : null;
+  }
+
+  async getJob(jobId: string) {
+    const { data, error } = await this.supabase
+      .from('jobs')
+      .select('*')
+      .eq('id', jobId)
+      .single();
     
     if (error) throw error;
     return data;

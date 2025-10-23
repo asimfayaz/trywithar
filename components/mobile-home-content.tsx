@@ -421,7 +421,7 @@ export function MobileHomeContent() {
         )
         
         // Navigate to generator view
-        //navigateToGenerator(modelId)
+        navigateToGenerator(modelId)
         
         // Clean up temporary models
         if (selectedModel.isTemporary) {

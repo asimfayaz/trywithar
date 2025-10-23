@@ -31,28 +31,28 @@ interface ModelGeneratorProps {
 // ============================================================================
 
 /** Configuration for photo upload positions */
-const positions = [
+const PHOTO_POSITIONS = [
   { key: "front" as keyof PhotoSet, label: "Front", required: true },
   { key: "left" as keyof PhotoSet, label: "Left", required: false },
   { key: "right" as keyof PhotoSet, label: "Right", required: false },
   { key: "back" as keyof PhotoSet, label: "Back", required: false },
-]
+] as const
 
 /** Processing stages for 3D model generation */
-const stages: { key: ModelStatus; label: string; icon: string }[] = [
-  { key: 'uploading_photos', label: 'Uploading photos', icon: '📤' },
-  { key: 'removed_background', label: 'Removed background', icon: '🎨' },
-  { key: 'generating_3d_model', label: 'Generating 3D model', icon: '🎯' },
-];
+const PROCESSING_STAGES = [
+  { key: 'uploading_photos' as ModelStatus, label: 'Uploading photos', icon: '📤' },
+  { key: 'removed_background' as ModelStatus, label: 'Removed background', icon: '🎨' },
+  { key: 'generating_3d_model' as ModelStatus, label: 'Generating 3D model', icon: '🎯' },
+] as const
 
 /** User-friendly error messages for different failure states */
-const errorMessages: Record<string, string> = {
-  'upload_failed': 'Failed to upload photo',
-  'bgr_removal_failed': 'Failed to remove background',
-  'job_creation_failed': 'Failed to create job',
-  'model_generation_failed': 'Failed to generate 3D model',
-  'model_saving_failed': 'Failed to save 3D model'
-}
+// const ERROR_MESSAGES: Record<string, string> = {
+//   'upload_failed': 'Failed to upload photo',
+//   'bgr_removal_failed': 'Failed to remove background',
+//   'job_creation_failed': 'Failed to create job',
+//   'model_generation_failed': 'Failed to generate 3D model',
+//   'model_saving_failed': 'Failed to save 3D model'
+// }
 
 // ============================================================================
 // COMPONENT

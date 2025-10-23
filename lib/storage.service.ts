@@ -11,32 +11,51 @@ interface DraftRecord {
 }
 
 export class StorageService {
-  private dbPromise: Promise<IDBDatabase>;
+  private dbPromise: Promise<IDBDatabase> | null = null;
 
   constructor() {
-    this.dbPromise = new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, 2);
-      
-      request.onupgradeneeded = (event) => {
-        const db = request.result;
-        const transaction = request.transaction;
+    // Only initialize indexedDB in browser environment
+    if (typeof window !== 'undefined' && typeof indexedDB !== 'undefined') {
+      this.dbPromise = new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, 2);
         
-        if (!db.objectStoreNames.contains(STORE_NAME)) {
-          // Create store and index for new databases
-          const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-          store.createIndex('position', 'position', { unique: false });
-        } else if (transaction) {
-          // Add index to existing databases
-          const store = transaction.objectStore(STORE_NAME);
-          if (!store.indexNames.contains('position')) {
+        request.onupgradeneeded = (event) => {
+          const db = request.result;
+          const transaction = request.transaction;
+          
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            // Create store and index for new databases
+            const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
             store.createIndex('position', 'position', { unique: false });
+          } else if (transaction) {
+            // Add index to existing databases
+            const store = transaction.objectStore(STORE_NAME);
+            if (!store.indexNames.contains('position')) {
+              store.createIndex('position', 'position', { unique: false });
+            }
           }
-        }
-      };
-      
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
+        };
+        
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    } else {
+      // In server environment or when indexedDB is not available, set to null
+      this.dbPromise = null;
+    }
+  }
+
+  private async getDB(): Promise<IDBDatabase | null> {
+    if (!this.dbPromise) {
+      return null;
+    }
+    
+    try {
+      return await this.dbPromise;
+    } catch (error) {
+      console.warn('Failed to initialize indexedDB:', error);
+      return null;
+    }
   }
 
   async storeDraft(position: string, file: File, expiresAt: Date): Promise<void> {
@@ -50,7 +69,12 @@ export class StorageService {
       { type: (file as File).type || 'image/jpeg' }
     );
     
-    const db = await this.dbPromise;
+    const db = await this.getDB();
+    if (!db) {
+      // Skip storage if indexedDB is not available
+      return;
+    }
+    
     const transaction = db.transaction(STORE_NAME, 'readwrite');
     const store = transaction.objectStore(STORE_NAME);
     
@@ -69,7 +93,12 @@ export class StorageService {
   }
 
   async getDraft(positionOrId: string, isPosition = false): Promise<File | null> {
-    const db = await this.dbPromise;
+    const db = await this.getDB();
+    if (!db) {
+      // Return null if indexedDB is not available
+      return null;
+    }
+    
     const transaction = db.transaction(STORE_NAME, 'readonly');
     const store = transaction.objectStore(STORE_NAME);
     
@@ -143,14 +172,24 @@ export class StorageService {
   }
 
   async deleteDraft(id: string): Promise<void> {
-    const db = await this.dbPromise;
+    const db = await this.getDB();
+    if (!db) {
+      // Skip deletion if indexedDB is not available
+      return;
+    }
+    
     const transaction = db.transaction(STORE_NAME, 'readwrite');
     const store = transaction.objectStore(STORE_NAME);
     store.delete(id);
   }
 
   async deleteExpiredDrafts(): Promise<void> {
-    const db = await this.dbPromise;
+    const db = await this.getDB();
+    if (!db) {
+      // Skip deletion if indexedDB is not available
+      return;
+    }
+    
     const transaction = db.transaction(STORE_NAME, 'readwrite');
     const store = transaction.objectStore(STORE_NAME);
     
@@ -172,7 +211,12 @@ export class StorageService {
   }
 
   async hasDraft(id: string): Promise<boolean> {
-    const db = await this.dbPromise;
+    const db = await this.getDB();
+    if (!db) {
+      // Return false if indexedDB is not available
+      return false;
+    }
+    
     const transaction = db.transaction(STORE_NAME, 'readonly');
     const store = transaction.objectStore(STORE_NAME);
     

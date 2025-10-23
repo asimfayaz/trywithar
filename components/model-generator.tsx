@@ -7,6 +7,10 @@ import { cn } from "@/lib/utils"
 import type { PhotoSet, UploadItem } from "@/app/page"
 import type { ModelStatus } from "@/lib/supabase/types"
 
+// ============================================================================
+// TYPES & INTERFACES
+// ============================================================================
+
 interface ModelGeneratorProps {
   photoSet: PhotoSet
   onUpload: (file: File | UploadItem, position: keyof PhotoSet) => void
@@ -22,6 +26,11 @@ interface ModelGeneratorProps {
   isFullView?: boolean
 }
 
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+/** Configuration for photo upload positions */
 const positions = [
   { key: "front" as keyof PhotoSet, label: "Front", required: true },
   { key: "left" as keyof PhotoSet, label: "Left", required: false },
@@ -29,13 +38,14 @@ const positions = [
   { key: "back" as keyof PhotoSet, label: "Back", required: false },
 ]
 
+/** Processing stages for 3D model generation */
 const stages: { key: ModelStatus; label: string; icon: string }[] = [
   { key: 'uploading_photos', label: 'Uploading photos', icon: '📤' },
-  { key: 'removing_background', label: 'Removing background', icon: '🎨' },
+  { key: 'removed_background', label: 'Removed background', icon: '🎨' },
   { key: 'generating_3d_model', label: 'Generating 3D model', icon: '🎯' },
 ];
 
-// Error messages for different failure states
+/** User-friendly error messages for different failure states */
 const errorMessages: Record<string, string> = {
   'upload_failed': 'Failed to upload photo',
   'bgr_removal_failed': 'Failed to remove background',
@@ -43,6 +53,10 @@ const errorMessages: Record<string, string> = {
   'model_generation_failed': 'Failed to generate 3D model',
   'model_saving_failed': 'Failed to save 3D model'
 }
+
+// ============================================================================
+// COMPONENT
+// ============================================================================
 
 export function ModelGenerator({
   photoSet,
@@ -56,8 +70,19 @@ export function ModelGenerator({
   selectedModel,
   errorMessage,
 }: ModelGeneratorProps) {
+    
+  // ============================================================================
+  // STATE
+  // ============================================================================
+  
+  /** Track which photo slot is currently being dragged over */
+
   const [dragOver, setDragOver] = useState<keyof PhotoSet | null>(null)
+
+    /** Global loading state (currently unused, can be removed if not needed) */
   const [isLoading, setIsLoading] = useState(false)
+
+  /** Loading state for each individual photo position */
   const [draftLoading, setDraftLoading] = useState<Record<keyof PhotoSet, boolean>>({
     front: false,
     left: false,
@@ -65,18 +90,34 @@ export function ModelGenerator({
     back: false
   })
 
-  // Clean up blob URLs when component unmounts or photos change
+  // ============================================================================
+  // EFFECTS
+  // ============================================================================
+  
+  /**
+   * Cleanup effect: Revoke blob URLs when component unmounts
+   * This prevents memory leaks from temporary file URLs
+   */
   useEffect(() => {
     return () => {
       // Revoke all blob URLs that don't have persistent URLs
       Object.values(photoSet).forEach(item => {
         if (item && item.dataUrl && !item.persistentUrl) {
-          // No need to revoke data URLs as they are in-memory
+          // Data URLs are in-memory and don't need explicit cleanup
+          // Blob URLs would need URL.revokeObjectURL() here
         }
       });
     };
   }, [photoSet]);
 
+  // ============================================================================
+  // EVENT HANDLERS
+  // ============================================================================
+  
+  /**
+   * Handle file selection from input element
+   * Validates that selected file is an image before uploading
+   */
   const handleFileSelect = (position: keyof PhotoSet) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file && file.type.startsWith("image/")) {
@@ -84,16 +125,25 @@ export function ModelGenerator({
     }
   }
 
+  /**
+   * Handle drag over event - highlights the drop zone
+   */
   const handleDragOver = (position: keyof PhotoSet) => (e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(position)
   }
 
+  /**
+   * Handle drag leave event - removes drop zone highlight
+   */
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(null)
   }
 
+  /**
+   * Handle file drop - extracts image file and uploads it
+   */
   const handleDrop = (position: keyof PhotoSet) => (e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(null)
@@ -106,54 +156,83 @@ export function ModelGenerator({
     }
   }
 
+  // ============================================================================
+  // COMPUTED VALUES
+  // ============================================================================
+  
+  /** Determine if we should show processing steps */
   const showProcessing = (isGenerating || 
                          selectedModel?.status === "processing" || 
                          selectedModel?.status === "failed") && 
                          processingStage
-  const currentStageIndex = processingStage ? stages.findIndex((s) => s.key === processingStage) : -1
+
+  /** Get the index of the current processing stage */                     
+  const currentStageIndex = processingStage
+    ? PROCESSING_STAGES.findIndex((s) => s.key === processingStage)
+    : -1
+
+  /** Check if model is in draft state (not yet generated) */
+  const isDraftModel = !selectedModel || selectedModel?.status === "draft"
+  
+  // ============================================================================
+  // RENDER - Main Component
+  // ============================================================================
+  
 
   return (
     <div className="h-full flex flex-col">
-      {/* Photo Grid - 1x4 horizontal layout with square aspect ratio */}
+      
+      {/* ============================================================================
+          PHOTO GRID - 1x4 horizontal layout with square aspect ratio
+          ============================================================================ */}
       <div className="grid grid-cols-4 gap-4 mb-4">
-        {positions.map(({ key, label, required }) => {
+        {PHOTO_POSITIONS.map(({ key, label, required }) => {
           const photo = photoSet[key]
           const isDragOver = dragOver === key
           const isLoadingPosition = draftLoading[key]
 
           return (
             <div key={key} className="flex flex-col">
+
+              {/* Photo Position Header */}
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-gray-700">
                   {label} {required && <span className="text-red-500">*</span>}
                 </span>
+
+                {/* Remove button (only for non-front photos) */}
                 {photo && key !== "front" && (
                   <button
                     onClick={isRetrying ? undefined : () => onRemove(key)}
                     disabled={isRetrying}
-                    className={`text-xs ${isRetrying ? 'text-gray-400 cursor-not-allowed' : 'text-red-500 hover:text-red-700'}`}
+                    className={cn(
+                      "text-xs",
+                      isRetrying 
+                        ? "text-gray-400 cursor-not-allowed" 
+                        : "text-red-500 hover:text-red-700"
+                    )}
                   >
                     Remove
                   </button>
                 )}
               </div>
 
+              {/* Photo Upload/Display Area */}
               <div
                 className={cn(
                   "relative border-2 border-dashed rounded-lg aspect-square transition-colors group",
-                  isDragOver
-                    ? "border-blue-500 bg-blue-50 cursor-pointer"
-                    : photo
-                      ? "border-green-300 bg-green-50 hover:border-green-400 cursor-pointer"
-                      : "border-gray-300 hover:border-gray-400 bg-gray-50 hover:bg-gray-100 cursor-pointer",
-                  isLoadingPosition ? "animate-pulse" : "",
-                  isRetrying ? "opacity-50 cursor-not-allowed" : ""
+                  isDragOver && "border-blue-500 bg-blue-50 cursor-pointer",
+                  photo && "border-green-300 bg-green-50 hover:border-green-400 cursor-pointer",
+                  !photo && !isDragOver && "border-gray-300 hover:border-gray-400 bg-gray-50 hover:bg-gray-100 cursor-pointer",
+                  isLoadingPosition && "animate-pulse",
+                  isRetrying && "opacity-50 cursor-not-allowed"
                 )}
                 onDragOver={isRetrying ? undefined : handleDragOver(key)}
                 onDragLeave={isRetrying ? undefined : handleDragLeave}
                 onDrop={isRetrying ? undefined : handleDrop(key)}
                 onClick={isRetrying ? undefined : () => document.getElementById(`file-input-${key}`)?.click()}
               >
+                {/* Hidden file input */}
                 <input
                   id={`file-input-${key}`}
                   type="file"
@@ -164,6 +243,7 @@ export function ModelGenerator({
                 />
 
                 {photo ? (
+                  // Photo is uploaded - show image with replace option
                   <div className="relative aspect-square w-full h-full">
                     <img
                       src={photo.persistentUrl || photo.dataUrl}
@@ -171,13 +251,14 @@ export function ModelGenerator({
                       className="w-full h-full object-cover rounded-lg"
                     />
                     
-                    {/* Loading spinner */}
+                    {/* Loading spinner overlay */}
                     {isLoadingPosition && (
                       <div className="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center rounded-lg">
                         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white"></div>
                       </div>
                     )}
 
+                    {/* Replace button (appears on hover) */}
                     <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all rounded-lg flex items-center justify-center">
                       <Button
                         size="sm"
@@ -194,6 +275,7 @@ export function ModelGenerator({
                     </div>
                   </div>
                 ) : (
+                  // No photo uploaded - show empty state with add prompt
                   <div className="flex flex-col items-center justify-center h-full p-2">
                     {isLoadingPosition ? (
                       <div className="flex flex-col items-center">
@@ -225,17 +307,21 @@ export function ModelGenerator({
         })}
       </div>
 
-      {/* Instructions */}
+      {/* ============================================================================
+          INSTRUCTIONS
+          ============================================================================ */}
       <div className="text-center mb-4">
         <p className="text-sm text-gray-500 sm:mb-2">
-          {(!selectedModel || selectedModel?.status === "draft") && "Upload up to 4 photos for better 3D model quality"}
+          {isDraftModel && "Upload up to 4 photos for better 3D model quality"}
         </p>
         <p className="hidden sm:inline text-xs text-gray-400">
-          {(!selectedModel || selectedModel?.status === "draft") && "Front photo is required. Left, Right, and Back are optional."}
+          {isDraftModel && "Front photo is required. Left, Right, and Back are optional."}
         </p>
       </div>
 
-      {/* Generate Button - appears right after the photo grid */}
+      {/* ============================================================================
+          GENERATE BUTTON
+          ============================================================================ */}
       {photoSet.front && selectedModel && onGenerate && (
         <div className="mb-4">
           <Button
@@ -247,17 +333,18 @@ export function ModelGenerator({
         </div>
       )}
 
-      {/* Processing Steps - appears below the button during generation */}
+      {/* ============================================================================
+          PROCESSING STEPS - Shows progress during generation
+          ============================================================================ */}
       {showProcessing && (
         <div className="mb-4 bg-gray-50 rounded-lg p-4">
           <h3 className="text-sm font-medium text-gray-900 mb-3">Generation Progress</h3>
           <div className="space-y-3">
-            {stages.map((stageItem, index) => {
-              // Adjust stage index for failed models to show first two as completed
-              let adjustedStageIndex = currentStageIndex;
-              if (selectedModel?.status === "failed") {
-                adjustedStageIndex = 2; // Generating 3D model step
-              }
+            {PROCESSING_STAGES.map((stageItem, index) => {
+              // Adjust stage index for failed models to show progress up to failure point
+              const adjustedStageIndex = selectedModel?.status === "failed"
+                ? 2
+                : currentStageIndex
 
               const isCompleted = index < adjustedStageIndex
               const isCurrent = index === adjustedStageIndex
@@ -265,7 +352,8 @@ export function ModelGenerator({
 
               return (
                 <div key={stageItem.key} className="flex items-center space-x-3">
-                  {/* Icon */}
+                  
+                  {/* Stage Status Icon */}
                   <div
                     className={cn(
                       "w-6 h-6 rounded-full flex items-center justify-center text-xs flex-shrink-0",
@@ -275,6 +363,7 @@ export function ModelGenerator({
                       isPending && "bg-gray-200 text-gray-500",
                     )}
                   >
+                    {/* Checkmark for completed stages */}
                     {isCompleted || (index === 2 && selectedModel?.status === "completed") ? (
                       <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                         <path
@@ -284,6 +373,7 @@ export function ModelGenerator({
                         />
                       </svg>
                     ) : isCurrent && selectedModel?.status === "failed" ? (
+                      /* X mark for failed stage */
                       <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                         <path
                           fillRule="evenodd"
@@ -292,13 +382,15 @@ export function ModelGenerator({
                         />
                       </svg>
                     ) : isCurrent ? (
+                      /* Spinner for current processing stage */
                       <div className="w-2 h-2 bg-white rounded-full animate-spin" />
                     ) : (
+                      /* Dot for pending stages */
                       <div className="w-2 h-2 bg-gray-400 rounded-full" />
                     )}
                   </div>
 
-                  {/* Label */}
+                  {/* Stage Label and Error Handling */}
                   <span
                     className={cn(
                       "text-sm font-medium",
@@ -309,6 +401,8 @@ export function ModelGenerator({
                     )}
                   >
                     {stageItem.label}
+
+                    {/* Retry button for failed generation */}
                     {stageItem.key === 'generating_3d_model' && 
                      isCurrent && 
                      selectedModel?.status === "failed" && (
@@ -319,12 +413,14 @@ export function ModelGenerator({
                         Retry?
                       </button>
                     )}
+
+                    {/* Error message display */}
                     {isCurrent && selectedModel?.status === "failed" && errorMessage && (
                       <span className="ml-2 text-xs text-red-500">({errorMessage})</span>
                     )}
                   </span>
 
-                  {/* Loading indicator for current stage */}
+                  {/* Animated dots for current processing stage */}
                   {isCurrent && selectedModel?.status === "processing" && (
                     <div className="flex-1 flex justify-end">
                       <div className="flex space-x-1">
@@ -347,7 +443,9 @@ export function ModelGenerator({
         </div>
       )}
 
-      {/* Information */}
+      {/* ============================================================================
+          INFORMATION FOOTER
+          ============================================================================ */}
       <div className="text-center">
         <p className="text-sm">Consumes 1 credit and takes ~2 minutes</p>
       </div>

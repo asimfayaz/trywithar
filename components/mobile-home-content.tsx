@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useToast } from '@/components/ui/use-toast';
 
+// Component imports
 import { ModelGallery } from "@/components/model-gallery"
 import { FileUpload } from "@/components/file-upload"
 import { ModelGenerator } from "@/components/model-generator"
@@ -12,11 +13,13 @@ import { MobileNavigationHeader } from "@/components/mobile-navigation-header"
 import { Button } from "@/components/ui/button";
 import { AuthModal } from "@/components/auth-modal"
 
+// Hook imports
 import { useNavigation } from "@/contexts/NavigationContext"
 import { useIsMobile } from "@/components/ui/use-mobile"
 import { useAuth } from "@/contexts/AuthContext"
 import { useModelGeneration } from "@/hooks/useModelGeneration"
 
+// Service imports
 import { StorageService } from "@/lib/storage.service"
 import { ModelService } from "@/lib/supabase/model.service"
 import { supabase } from "@/lib/supabase"

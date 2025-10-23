@@ -1,10 +1,23 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 
-// Type alias
+// ============================================================================
+// TYPES
+// ============================================================================
+
+/**
+ * Represents the possible view states in the application
+ * - gallery: Main view showing all models
+ * - upload: View for uploading new models
+ * - generator: View for generating content with a specific model
+ * - preview: View for previewing a specific model
+ */
 export type ViewState = 'gallery' | 'upload' | 'generator' | 'preview'
 
-// Context interface
+/**
+ * Interface defining the navigation context API
+ * Provides current state and navigation methods to child components
+ */
 interface NavigationContextType {
   currentView: ViewState
   currentModelId: string | null
@@ -13,8 +26,18 @@ interface NavigationContextType {
   navigateToGenerator: (modelId: string) => void
   navigateToPreview: (modelId: string) => void
 }
-// Context creation and usage hook
+
+// ============================================================================
+// CONTEXT SETUP
+// ============================================================================
+
 const NavigationContext = createContext<NavigationContextType | null>(null)
+
+/**
+ * Custom hook to access navigation context
+ * @throws Error if used outside of NavigationProvider
+ * @returns NavigationContextType with current state and navigation methods
+ */
 export const useNavigation = () => {
   const context = useContext(NavigationContext)
   if (!context) {
@@ -23,37 +46,68 @@ export const useNavigation = () => {
   return context
 }
 
-// Provider component
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+const VALID_VIEWS: ViewState[] = ['gallery', 'upload', 'generator', 'preview']
+const NAVIGATION_DELAY_MS = 100
+
+// ============================================================================
+// PROVIDER COMPONENT
+// ============================================================================
+
 export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Next.js routing hooks
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-   // State variables and initial values
+  // Component state
   const [currentView, setCurrentView] = useState<ViewState>('gallery')
   const [currentModelId, setCurrentModelId] = useState<string | null>(null)
+  
+  /**
+   * Ref to track navigation in progress and prevent duplicate navigations
+   * This prevents race conditions when multiple navigation calls happen simultaneously
+   */
   const navigationInProgress = useRef(false)
   
-  // UseEffect hook to initialize state from URL parameters
+  // ==========================================================================
+  // EFFECTS
+  // ==========================================================================
+
+  /**
+   * Synchronize component state with URL parameters on mount and URL changes
+   * This enables deep linking and browser back/forward navigation
+   */
   useEffect(() => {
+    // Skip if navigation is currently in progress to avoid conflicts
     if (navigationInProgress.current) return;
 
     const viewParam = searchParams.get('view') as ViewState | null
     const modelIdParam = searchParams.get('modelId')
     
-    if (viewParam && ['gallery', 'upload', 'generator', 'preview'].includes(viewParam)) {
+    // Update view if valid view parameter exists in URL
+    if (viewParam && VALID_VIEWS.includes(viewParam)) {
       setCurrentView(viewParam)
     }
     
-    if (modelIdParam) {
-      setCurrentModelId(modelIdParam)
-    } else {
-      setCurrentModelId(null)
-    }
+    // Update modelId or clear it based on URL parameter
+    setCurrentModelId(modelIdParam || null)
   }, [searchParams])
 
   
-  // Helper function to create URL with query parameters for deep linking
+  // ==========================================================================
+  // HELPER FUNCTIONS
+  // ==========================================================================
+
+  /**
+   * Creates a URL string with updated query parameters for navigation
+   * @param view - The view state to navigate to
+   * @param modelId - Optional model ID (excluded if starts with 'temp-')
+   * @returns Complete URL string with query parameters
+   */
   const createUrl = (view: ViewState, modelId?: string) => {
     const params = new URLSearchParams(searchParams.toString())
     params.set('view', view)
@@ -67,66 +121,84 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     return `${pathname}?${params.toString()}`
   }
 
-  // Navigation functions
+  /**
+   * Resets the navigation lock after a delay
+   * Prevents rapid successive navigation calls
+   */
+  const resetNavigationLock = (): void => {
+    setTimeout(() => {
+      navigationInProgress.current = false
+    }, NAVIGATION_DELAY_MS)
+  }
+
+  // ==========================================================================
+  // NAVIGATION METHODS
+  // ==========================================================================
+
+  /**
+   * Navigate to the gallery view (main model listing)
+   * Clears any selected model
+   */
   const navigateToGallery = () => {
     if (navigationInProgress.current) return;
     navigationInProgress.current = true;
     
-    router.push(createUrl('gallery'))
     setCurrentView('gallery')
     setCurrentModelId(null)
+    router.push(createUrl('gallery'))
     
-    // Reset navigation flag after a short delay
-    setTimeout(() => {
-      navigationInProgress.current = false;
-    }, 100)
+    resetNavigationLock()
   }
   
+  /**
+   * Navigate to the upload view (for adding new models)
+   * Clears any selected model
+   */
   const navigateToUpload = () => {
     if (navigationInProgress.current) return;
     navigationInProgress.current = true;
     
-    router.push(createUrl('upload'))
     setCurrentView('upload')
     setCurrentModelId(null)
+    router.push(createUrl('upload'))
     
-    // Reset navigation flag after a short delay
-    setTimeout(() => {
-      navigationInProgress.current = false;
-    }, 100)
+    resetNavigationLock()
   }
   
+  /**
+   * Navigate to the generator view for a specific model
+   * @param modelId - ID of the model to use for generation
+   */
   const navigateToGenerator = (modelId: string) => {
-    //if (navigationInProgress.current) return;
+    if (navigationInProgress.current) return;
     navigationInProgress.current = true;
     
-    // Ensure we set the modelId before navigating to avoid race conditions
+    // Set modelId first to prevent race conditions
     setCurrentModelId(modelId);
-    router.push(createUrl('generator', modelId))
     setCurrentView('generator')
+    router.push(createUrl('generator', modelId))
     
-    // Reset navigation flag after a short delay
-    //setTimeout(() => {
-      navigationInProgress.current = false;
-    //}, 100)
+    resetNavigationLock()
   }
   
+  /**
+   * Navigate to the preview view for a specific model
+   * @param modelId - ID of the model to preview
+   */
   const navigateToPreview = (modelId: string) => {
     if (navigationInProgress.current) return;
     navigationInProgress.current = true;
     
-    router.push(createUrl('preview', modelId))
     setCurrentView('preview')
     setCurrentModelId(modelId)
-    
-    // Reset navigation flag after a short delay
-    setTimeout(() => {
-      navigationInProgress.current = false;
-    }, 100)
+    router.push(createUrl('preview', modelId))
+
+    resetNavigationLock()
   }
 
-  // Add a method to check if navigation is in progress
-  const isNavigating = () => navigationInProgress.current;
+  // ==========================================================================
+  // PROVIDER RENDER
+  // ==========================================================================
 
   return (
     <NavigationContext.Provider value={{

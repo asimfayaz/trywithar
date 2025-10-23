@@ -1,83 +1,168 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
+// ============================================================================
+// Types
+// ============================================================================
+
 interface FileUploadProps {
+  /** Callback fired when a file is successfully uploaded */
   onUpload: (file: File) => void
+  /** Optional callback to handle auth checks before upload */
   onUploadRequest?: () => void
+  /** Disables the upload functionality when true */
   disabled?: boolean
 }
 
+// ============================================================================
+// Constants
+// ============================================================================
+
+const ACCEPTED_FILE_TYPES = "image/*"
+const MAX_FILE_SIZE_MB = 10
+const ALLOWED_EXTENSIONS = "JPG, PNG"
+
+// ============================================================================
+// Component
+// ============================================================================
+
 export function FileUpload({ onUpload, onUploadRequest, disabled = false }: FileUploadProps) {
+  // Track drag-over state for visual feedback
   const [isDragOver, setIsDragOver] = useState(false)
 
+  // ============================================================================
+  // File Processing Helpers
+  // ============================================================================
+
+  /**
+   * Validates and processes an image file
+   * Returns the file if it's a valid image, null otherwise
+   */
+  const validateImageFile = (file: File): File | null => {
+    return file.type.startsWith("image/") ? file : null
+  }
+
+  /**
+   * Handles the actual file upload logic
+   * Checks for onUploadRequest callback to handle auth, otherwise uploads directly
+   */
+  const processFileUpload = useCallback(
+    (file: File) => {
+      const validFile = validateImageFile(file)
+      if (!validFile) return
+
+      // If auth check is required, trigger it before upload
+      if (onUploadRequest) {
+        onUploadRequest()
+      }
+      
+      // Proceed with upload
+      onUpload(validFile)
+    },
+    [onUpload, onUploadRequest]
+  )
+
+  /**
+   * Opens a native file picker dialog
+   * Used as fallback when onUploadRequest is not provided
+   */
+  const openFilePicker = useCallback(() => {
+    const input = document.createElement("input")
+    input.type = "file"
+    input.accept = ACCEPTED_FILE_TYPES
+    
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (file) {
+        processFileUpload(file)
+      }
+    }
+    
+    input.click()
+  }, [processFileUpload])
+
+  // ============================================================================
+  // Drag and Drop Handlers
+  // ============================================================================
+
+  /**
+   * Handles drag over event
+   * Prevents default to allow drop and shows visual feedback
+   */
   const handleDragOver = useCallback(
     (e: React.DragEvent) => {
       if (disabled) return
       e.preventDefault()
       setIsDragOver(true)
     },
-    [disabled],
+    [disabled]
   )
 
+  /**
+   * Handles drag leave event
+   * Removes visual feedback when user drags away
+   */
   const handleDragLeave = useCallback(
     (e: React.DragEvent) => {
       if (disabled) return
       e.preventDefault()
       setIsDragOver(false)
     },
-    [disabled],
+    [disabled]
   )
 
+  /**
+   * Handles file drop event
+   * Extracts the first image file and processes it
+   */
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       if (disabled) return
       e.preventDefault()
       setIsDragOver(false)
 
+      // Get all dropped files and find the first image
       const files = Array.from(e.dataTransfer.files)
       const imageFile = files.find((file) => file.type.startsWith("image/"))
 
       if (imageFile) {
-        if (onUploadRequest) {
-          // Store the file temporarily and trigger auth check
-          const tempInput = document.createElement('input');
-          tempInput.type = 'file';
-          const dataTransfer = new DataTransfer();
-          dataTransfer.items.add(imageFile);
-          tempInput.files = dataTransfer.files;
-          tempInput.onchange = () => {
-            const file = tempInput.files?.[0];
-            if (file) {
-              onUpload(file);
-            }
-          };
-          onUploadRequest();
-        } else {
-          onUpload(imageFile);
-        }
+        processFileUpload(imageFile)
       }
     },
-    [onUpload, onUploadRequest, disabled],
+    [disabled, processFileUpload]
   )
 
-  const handleFileSelect = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (disabled) return
-      const file = e.target.files?.[0]
-      if (file && file.type.startsWith("image/")) {
-        onUpload(file)
-      }
-    },
-    [onUpload, disabled],
-  )
+  // ============================================================================
+  // Upload Button Handler
+  // ============================================================================
+
+  /**
+   * Handles upload button click
+   * Triggers auth check if provided, otherwise opens file picker
+   */
+  const handleUploadClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    
+    if (onUploadRequest) {
+      // Trigger auth check - parent component handles file selection
+      onUploadRequest()
+    } else {
+      // No auth check needed - open file picker directly
+      openFilePicker()
+    }
+  }
+
+  // ============================================================================
+  // Render
+  // ============================================================================
 
   return (
     <div className="h-full flex flex-col">
+      {/* Drop Zone Container */}
       <div
         className={cn(
           "border-2 border-dashed rounded-lg p-3 text-center flex-1 flex flex-col items-center justify-center transition-colors overflow-hidden",
@@ -85,17 +170,18 @@ export function FileUpload({ onUpload, onUploadRequest, disabled = false }: File
             ? "border-gray-200 bg-gray-50 cursor-not-allowed"
             : isDragOver
               ? "border-blue-500 bg-blue-50"
-              : "border-gray-300 hover:border-gray-400",
+              : "border-gray-300 hover:border-gray-400"
         )}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
         <div className="space-y-2 flex flex-col items-center justify-center max-h-full">
+          {/* Upload Icon */}
           <div
             className={cn(
               "w-8 h-8 mx-auto rounded-full flex items-center justify-center flex-shrink-0",
-              disabled ? "bg-gray-200" : "bg-gray-100",
+              disabled ? "bg-gray-200" : "bg-gray-100"
             )}
           >
             <svg
@@ -113,6 +199,7 @@ export function FileUpload({ onUpload, onUploadRequest, disabled = false }: File
             </svg>
           </div>
 
+          {/* Instructions Text - Hidden on mobile */}
           <div className="hidden sm:inline flex-shrink-0 text-center">
             <p className={cn("text-sm font-medium mb-1", disabled ? "text-gray-400" : "text-gray-900")}>
               {disabled ? "Photos uploaded" : "Drop front photo here"}
@@ -122,34 +209,20 @@ export function FileUpload({ onUpload, onUploadRequest, disabled = false }: File
             </p>
           </div>
 
+          {/* Upload Button and File Info */}
           {!disabled && (
             <div className="space-y-1 flex-shrink-0">
-              <Button 
-                size="sm" 
+              <Button
+                size="sm"
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium"
-                onClick={(e) => {
-                  e.preventDefault();
-                  if (onUploadRequest) {
-                    onUploadRequest();
-                  } else {
-                    // Fallback to direct upload if no auth check function provided
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.accept = 'image/*';
-                    input.onchange = (e) => {
-                      const file = (e.target as HTMLInputElement).files?.[0];
-                      if (file && file.type.startsWith("image/")) {
-                        onUpload(file);
-                      }
-                    };
-                    input.click();
-                  }
-                }}
+                onClick={handleUploadClick}
               >
                 Upload Front Photo
               </Button>
 
-              <p className="text-xs text-gray-400">JPG, PNG up to 10MB</p>
+              <p className="text-xs text-gray-400">
+                {ALLOWED_EXTENSIONS} up to {MAX_FILE_SIZE_MB}MB
+              </p>
             </div>
           )}
         </div>

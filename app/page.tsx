@@ -224,7 +224,8 @@ function HomeContent() {
     uploadRawPhotos,
     removeBackground,
     generate3DModel,
-    createModelDraft
+    createModelDraft,
+    retryModelGeneration
   } = useModelGeneration();
 
   // ============================================================================
@@ -647,6 +648,50 @@ function HomeContent() {
 
     setIsGenerating(true);
 
+    // Check if this is a retry for a failed model
+    if (selectedModel.status === "failed" && selectedModel.id) {
+      try {
+        // ========================================
+        // RETRY LOGIC (MATCHING MOBILE IMPLEMENTATION)
+        // ========================================
+        console.log("Starting retry for model:", selectedModel.id)
+        const retryResult = await retryModelGeneration(
+          selectedModel.id, 
+          user.id, 
+          await getAccessToken() || undefined
+        )
+        
+        // Update model with job ID
+        setSelectedModel(prev => prev ? {
+          ...prev,
+          jobId: retryResult.jobId,
+          status: "processing",
+          processingStage: 'generating_3d_model',
+          error: undefined
+        } : null)
+        
+        console.log("Started retry job with ID:", retryResult.jobId)
+        
+        // Start polling for completion
+        if (retryResult.jobId) {
+          checkJobStatusWithRetry(selectedModel.id, retryResult.jobId)
+        }
+      } catch (error) {
+        console.error("Retry error:", error)
+        toast({
+          title: "Retry failed",
+          description: "Failed to retry model generation. Please try again.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsGenerating(false);
+      }
+      return; // Exit after handling retry
+    }
+
+    // ========================================
+    // NEW GENERATION LOGIC
+    // ========================================
     // Create processing model entry
     const newModel: ModelData = {
       ...selectedModel,

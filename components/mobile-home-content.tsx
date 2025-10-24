@@ -302,7 +302,6 @@ export function MobileHomeContent() {
           updatedAt: new Date(),
           photoSet: { front: uploadItem },
           processingStage: 'uploading_photos',
-          isTemporary: true,
           error: undefined
         };
 

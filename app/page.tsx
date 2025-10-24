@@ -22,6 +22,7 @@ import { ViewState } from '@/contexts/NavigationContext';
 // Service imports
 import { ModelService } from "@/lib/supabase/model.service"
 import { StorageService } from "@/lib/storage.service"
+import { supabase } from "@/lib/supabase"
 
 // Hook imports
 import { useIsMobile } from "@/components/ui/use-mobile"
@@ -165,6 +166,23 @@ async function fileToDataUrl(file: File): Promise<string> {
   })
 }
 
+/**
+ * Gets the current Supabase access token
+ */
+async function getAccessToken(): Promise<string | null> {
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession()
+    if (error) {
+      console.error('Error getting session:', error)
+      return null
+    }
+    return session?.access_token || null
+  } catch (error) {
+    console.error('Error getting access token:', error)
+    return null
+  }
+}
+
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
@@ -205,7 +223,8 @@ function HomeContent() {
   const { 
     uploadRawPhotos,
     removeBackground,
-    generate3DModel
+    generate3DModel,
+    createModelDraft
   } = useModelGeneration();
 
   // ============================================================================
@@ -438,21 +457,36 @@ function HomeContent() {
       };
 
       if (position === "front") {
-        const tempId = `temp-${Date.now()}`;
-        const previewModel: ModelData = {
-          id: tempId,
-          thumbnail: dataUrl,
-          status: "draft",
-          uploadedAt: new Date(),
-          updatedAt: new Date(),
-          photoSet: { front: uploadItem },
-          processingStage: 'uploading_photos',
-          isTemporary: true,
-          error: undefined // Initialize error
-        };
+        try {
+          // Create database draft model instead of temporary ID
+          const modelId = await createModelDraft(user.id);
+          
+          const previewModel: ModelData = {
+            id: modelId,
+            thumbnail: dataUrl,
+            status: "draft",
+            uploadedAt: new Date(),
+            updatedAt: new Date(),
+            photoSet: { front: uploadItem },
+            processingStage: 'draft',
+            isTemporary: false, // Now a real database record
+            error: undefined
+          };
 
-        setSelectedModel(previewModel);
-        setCurrentPhotoSet({ front: uploadItem });
+          setSelectedModel(previewModel);
+          setCurrentPhotoSet({ front: uploadItem });
+          
+          // Add to models list immediately
+          setModels(prev => [previewModel, ...prev]);
+        } catch (draftError) {
+          console.error('❌ Draft creation failed:', draftError);
+          toast({
+            title: "Draft creation failed",
+            description: `Could not create model: ${draftError instanceof Error ? draftError.message : 'Unknown error'}`,
+            variant: "destructive",
+          });
+          return;
+        }
       }
       // Handle additional angle uploads (updates existing model)
       else if (selectedModel) {
@@ -531,6 +565,7 @@ function HomeContent() {
    * Loads full photo set data from database
    */
   const handleSelectModel = async (model: ModelData) => {
+    // Only clean up temporary models (not database-backed models)
     if (selectedModel?.isTemporary) {
       const storage = new StorageService();
       try {
@@ -622,7 +657,10 @@ function HomeContent() {
       error: undefined
     };
 
-    setModels(prev => [newModel, ...prev]);
+    // Only add to models list if it's not already there
+    if (!models.some(m => m.id === newModel.id)) {
+      setModels(prev => [newModel, ...prev]);
+    }
     setSelectedModel(newModel);
     
     let jobId: string | null = null;
@@ -637,7 +675,7 @@ function HomeContent() {
       const processedUrl = await removeBackground(modelId, urlMap.front);
 
       // Step 3: Generate 3D model
-      const result = await generate3DModel(modelId, processedUrl, currentPhotoSet);
+      const result = await generate3DModel(modelId, processedUrl, currentPhotoSet, await getAccessToken() || undefined);
       jobId = result.jobId;
       
       // Update UI with job information
